@@ -18,9 +18,9 @@ export class BootScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
-    this.add.text(cx, cy - 40, 'CRYPT OF THE ETERNAL NIGHT', {
+    this.add.text(cx, cy - 40, '영원한 밤의 묘지', {
       fontFamily: 'Cinzel, serif',
-      fontSize: '20px',
+      fontSize: '28px',
       color: '#c9a24b',
     }).setOrigin(0.5);
 

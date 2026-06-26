@@ -49,7 +49,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   wand: {
     id: 'wand',
-    name: 'Magic Wand',
+    name: 'Arcane Bolt',
     description: '가장 가까운 적을 자동으로 추격하는 마법탄.',
     behavior: 'projectile-nearest',
     icon: sheet(FRAMES.WAND_BLUE),

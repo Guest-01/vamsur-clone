@@ -1,4 +1,4 @@
-# Crypt of the Eternal Night
+# 영원한 밤의 묘지 · Crypt of the Eternal Night
 
 웹 기반 **뱀파이어 서바이버(Vampire Survivors) 스타일** 데모. **Phaser 4 + TypeScript + Vite.**
 콘텐츠는 데모 규모지만 핵심 시스템 — 경험치 · 레벨 · 레벨업 강화 선택 · 무기/패시브 강화 · 웨이브 스폰 · 난이도 스케일링 · 보스 · 메타 진행(영구 강화/해금) — 은 모두 구현되어 있습니다.
@@ -59,6 +59,12 @@ public/assets/sprites/     # Kenney Tiny Dungeon 스프라이트시트 (CC0)
 - 스프라이트: **Kenney — "Tiny Dungeon"** ([kenney.nl](https://kenney.nl)), **CC0 1.0** (퍼블릭 도메인). `public/assets/sprites/CREDITS-kenney-tiny-dungeon.txt` 참고.
 - 보석 · 파티클 · 오라 · 배경 · UI 아이콘 등은 런타임에 코드로 생성합니다.
 - 폰트: *Press Start 2P*, *Cinzel* (Google Fonts, OFL) — `@fontsource`로 번들.
+
+## 고지 (Disclaimer)
+
+이 프로젝트는 **[Vampire Survivors](https://poncle.itch.io/vampire-survivors)** (© poncle Ltd)에서 영감을 받은 **비공식 · 비영리 · 학습용 클론**입니다. poncle 및 Vampire Survivors와 **아무런 제휴 관계가 없으며**, 원작의 코드 · 아트 · 음악 · 상표를 **일절 사용하지 않았습니다**. 모든 아트는 CC0(퍼블릭 도메인) 또는 자작이고, 차용한 것은 저작권 대상이 아닌 **장르 메커니즘(아이디어)** 뿐입니다. 무기 · 아이템 이름 등 표현 요소는 원작과 겹치지 않도록 자작 명칭으로 작성했습니다.
+
+> This is an **unofficial, non-commercial, educational** fan clone inspired by *Vampire Survivors* (© poncle Ltd). **Not affiliated with or endorsed by poncle.** No original code, art, audio, or trademarks are used; only the (non-copyrightable) genre mechanics are referenced. All art is CC0 or original.
 
 ## 라이선스
 

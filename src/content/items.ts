@@ -12,7 +12,7 @@ const gen = (texture: string) => ({ texture, frame: -1 });
 export const ITEMS: Record<string, ItemDef> = {
   hollowHeart: {
     id: 'hollowHeart',
-    name: 'Hollow Heart',
+    name: 'Lifestone',
     description: '최대 체력을 늘린다.',
     icon: gen(TEXTURES.ICON_HEART),
     maxLevel: 5,
@@ -24,7 +24,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   spinach: {
     id: 'spinach',
-    name: 'Spinach',
+    name: 'Bloodlust',
     description: '모든 피해량이 증가한다.',
     icon: gen(TEXTURES.ICON_FIST),
     maxLevel: 5,
@@ -48,7 +48,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   tome: {
     id: 'tome',
-    name: 'Empty Tome',
+    name: 'Swift Codex',
     description: '무기 재사용 대기시간을 줄인다.',
     icon: gen(TEXTURES.ICON_HOURGLASS),
     maxLevel: 5,
@@ -60,7 +60,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   candelabra: {
     id: 'candelabra',
-    name: 'Candelabra',
+    name: 'Brazier',
     description: '무기 효과 범위가 넓어진다.',
     icon: gen(TEXTURES.ICON_STAR),
     maxLevel: 5,
@@ -72,7 +72,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   duplicator: {
     id: 'duplicator',
-    name: 'Duplicator',
+    name: 'Echo Charm',
     description: '투사체/효과 개수가 늘어난다.',
     icon: sheet(FRAMES.DAGGER),
     maxLevel: 3,
@@ -84,7 +84,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   attractorb: {
     id: 'attractorb',
-    name: 'Attractorb',
+    name: 'Lodestone',
     description: '경험치 흡수 범위가 넓어진다.',
     icon: gen(TEXTURES.ICON_MAGNET),
     maxLevel: 4,
@@ -108,7 +108,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   clover: {
     id: 'clover',
-    name: 'Clover',
+    name: 'Black Cat',
     description: '행운이 올라 좋은 강화가 자주 나온다.',
     icon: gen(TEXTURES.ICON_CLOVER),
     maxLevel: 5,
@@ -120,7 +120,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   wings: {
     id: 'wings',
-    name: 'Wings',
+    name: 'Falcon Plume',
     description: '투사체 속도가 빨라진다.',
     icon: gen(TEXTURES.ICON_WING),
     maxLevel: 5,
@@ -132,7 +132,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   pummarola: {
     id: 'pummarola',
-    name: 'Pummarola',
+    name: 'Heartroot',
     description: '체력이 서서히 회복된다.',
     icon: sheet(FRAMES.POTION_GREEN),
     maxLevel: 5,
@@ -216,7 +216,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   crown: {
     id: 'crown',
-    name: 'Crown',
+    name: 'Halo of Wisdom',
     description: '경험치 획득량이 늘어난다.',
     icon: gen(TEXTURES.GEM_L),
     maxLevel: 5,

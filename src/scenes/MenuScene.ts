@@ -178,7 +178,7 @@ export class MenuScene extends Phaser.Scene {
 
   private buildTitle(W: number): void {
     const title = this.add
-      .text(W / 2, 116, 'CRYPT OF THE ETERNAL NIGHT', {
+      .text(W / 2, 116, '영원한 밤의 묘지', {
         fontFamily: 'Cinzel, serif',
         fontStyle: '700',
         fontSize: '80px',
@@ -200,7 +200,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     this.add
-      .text(W / 2, 192, '망자의 영원한 밤 — 끝없이 밀려드는 어둠 속에서 살아남아라', {
+      .text(W / 2, 192, 'Crypt of the Eternal Night — 끝없이 밀려드는 어둠 속에서 살아남아라', {
         fontFamily: 'Cinzel, serif',
         fontSize: '28px',
         color: hex(COLORS.PARCHMENT),
@@ -506,6 +506,17 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5)
       .setDepth(DEPTH.POPTEXT);
+
+    // unofficial fan-project disclaimer (bottom-left)
+    this.add
+      .text(16, H - 12, 'Vampire Survivors에서 영감받은 비공식·비영리 팬 프로젝트 (poncle과 무관)', {
+        fontFamily: 'Cinzel, serif',
+        fontSize: '16px',
+        color: hex(COLORS.TEXT_DIM),
+      })
+      .setOrigin(0, 1)
+      .setDepth(DEPTH.POPTEXT)
+      .setAlpha(0.65);
 
     // CC0 credit
     this.add
