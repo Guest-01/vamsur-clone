@@ -21,6 +21,7 @@ export class LevelUpOverlay {
   /** root container; lives for the lifetime of the overlay, toggled visible. */
   private readonly root: Phaser.GameObjects.Container;
   private readonly dim: Phaser.GameObjects.Rectangle;
+  private readonly glow: Phaser.GameObjects.Image;
   private readonly banner: Phaser.GameObjects.Text;
   private readonly bannerSub: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
@@ -39,26 +40,28 @@ export class LevelUpOverlay {
     this.scene = scene;
     this.gameEvents = gameEvents;
 
-    const cx = GAME.WIDTH / 2;
+    // Landscape-responsive: horizontal layout uses the LIVE width; relayout()
+    // re-centres for the current width on every show(). Height is fixed (1080).
+    const cx = scene.scale.width / 2;
 
     this.root = scene.add.container(0, 0);
     this.root.setScrollFactor(0).setDepth(DEPTH.POPTEXT + 30).setVisible(false);
 
     // Full-screen dim with a faint golden centre (set via a 2-layer overlay).
     this.dim = scene.add
-      .rectangle(cx, GAME.HEIGHT / 2, GAME.WIDTH, GAME.HEIGHT, 0x05040a, 0.78)
+      .rectangle(cx, GAME.HEIGHT / 2, scene.scale.width, GAME.HEIGHT, 0x05040a, 0.78)
       .setScrollFactor(0);
     this.root.add(this.dim);
 
     // Golden vignette pulse layer (multiplicative-feel via additive blend).
-    const glow = scene.add
+    this.glow = scene.add
       .image(cx, GAME.HEIGHT / 2, TEXTURES.VIGNETTE)
-      .setDisplaySize(GAME.WIDTH, GAME.HEIGHT)
+      .setDisplaySize(scene.scale.width, GAME.HEIGHT)
       .setTint(COLORS.GOLD)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.12)
       .setScrollFactor(0);
-    this.root.add(glow);
+    this.root.add(this.glow);
 
     // "LEVEL UP!" gothic banner.
     this.banner = scene.add
@@ -108,6 +111,7 @@ export class LevelUpOverlay {
     this.visible = true;
     this.locked = false;
 
+    this.relayout(); // re-centre the static chrome for the current live width
     this.bannerSub.setText(`Lv ${level}  —  강화를 선택하세요`);
     this.root.setVisible(true);
 
@@ -153,6 +157,21 @@ export class LevelUpOverlay {
     this.root.destroy();
   }
 
+  /**
+   * Re-centre the always-on chrome (dim, golden glow, banner + hint) for the
+   * current LIVE width. Called on every show() so a device rotation / resize
+   * that happened while the overlay was hidden is reflected next time it opens.
+   */
+  private relayout(): void {
+    const w = this.scene.scale.width;
+    const cx = w / 2;
+    this.dim.setPosition(cx, GAME.HEIGHT / 2).setSize(w, GAME.HEIGHT);
+    this.glow.setPosition(cx, GAME.HEIGHT / 2).setDisplaySize(w, GAME.HEIGHT);
+    this.banner.setX(cx);
+    this.bannerSub.setX(cx);
+    this.hint.setX(cx);
+  }
+
   /* --------------------------------------------------------------- */
   /* Card construction                                               */
   /* --------------------------------------------------------------- */
@@ -163,7 +182,7 @@ export class LevelUpOverlay {
     const cardH = 600;
     const gap = 52;
     const totalW = n * cardW + (n - 1) * gap;
-    const startX = GAME.WIDTH / 2 - totalW / 2 + cardW / 2;
+    const startX = this.scene.scale.width / 2 - totalW / 2 + cardW / 2;
     const baseY = GAME.HEIGHT / 2 + 36;
 
     for (let i = 0; i < n; i++) {

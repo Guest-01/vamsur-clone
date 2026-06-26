@@ -22,6 +22,8 @@ export class GameOverScene extends Phaser.Scene {
   private summary!: RunSummary;
   /** Whether this run set a new best survival time (defeat runs only). */
   private newBest = false;
+  /** live width captured at build time; used to throttle resize restarts. */
+  private lastW = 0;
 
   constructor() {
     super(SCENES.GAME_OVER);
@@ -33,9 +35,10 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
-    const W = GAME.WIDTH;
-    const H = GAME.HEIGHT;
+    const W = this.scale.width; // live (landscape-responsive) width
+    const H = GAME.HEIGHT; // fixed design height (1080)
     const s = this.summary;
+    this.lastW = W;
 
     this.buildBackdrop(W, H);
 
@@ -53,7 +56,23 @@ export class GameOverScene extends Phaser.Scene {
     this.buildButtons(W, s);
 
     this.bindInput();
+
+    // Landscape-responsive: restart re-centers the results for the new width
+    // (rotation / resize). The best-time record was already persisted in init().
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    });
+
     this.cameras.main.fadeIn(450, 0, 0, 0);
+  }
+
+  /** Restart to re-center for the new width (guarded against resize thrash). */
+  private onResize(): void {
+    if (Math.abs(this.scale.width - this.lastW) > 1) {
+      this.lastW = this.scale.width;
+      this.scene.restart();
+    }
   }
 
   /* --------------------------- backdrop --------------------------- */

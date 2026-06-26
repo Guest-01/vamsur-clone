@@ -96,18 +96,30 @@ export class HelpOverlay {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const cx = GAME.WIDTH / 2;
-    const cy = GAME.HEIGHT / 2;
-
+    // The panel + columns are built lazily in build() (called from show()) so
+    // they are centred for whatever the LIVE width is at the time of opening.
     this.root = scene.add
       .container(0, 0)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 40)
       .setVisible(false);
+  }
+
+  /**
+   * (Re)build the full panel centred for the current LIVE width. Cheap enough to
+   * run on every show(); a prior build's objects are cleared first so repeated
+   * opens (and post-rotation re-centring) stay correct.
+   */
+  private build(): void {
+    const scene = this.scene;
+    this.root.removeAll(true);
+
+    const cx = scene.scale.width / 2; // live width: re-centre horizontally
+    const cy = GAME.HEIGHT / 2; // fixed design height (1080)
 
     // backdrop
     const dim = scene.add
-      .rectangle(cx, cy, GAME.WIDTH, GAME.HEIGHT, 0x05040a, 0.86)
+      .rectangle(cx, cy, scene.scale.width, GAME.HEIGHT, 0x05040a, 0.86)
       .setScrollFactor(0)
       // interactive so it swallows clicks (otherwise they fall through to the
       // menu's character cards underneath, which are interactive).
@@ -191,6 +203,7 @@ export class HelpOverlay {
   }
 
   show(): void {
+    this.build(); // (re)build centred for the current live width
     this.visible = true;
     this.root.setVisible(true).setAlpha(0);
     this.scene.tweens.add({ targets: this.root, alpha: 1, duration: 160, ease: 'Quad.Out' });

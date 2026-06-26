@@ -28,6 +28,14 @@ export class PauseOverlay {
   private body?: Phaser.GameObjects.Container;
   private visible = false;
 
+  // Static chrome kept around so relayout() can re-centre it for the live width.
+  private readonly dim: Phaser.GameObjects.Rectangle;
+  private readonly panel: Phaser.GameObjects.Graphics;
+  private readonly title: Phaser.GameObjects.Text;
+  private readonly resumeBtn: Phaser.GameObjects.Container;
+  private readonly helpBtn: Phaser.GameObjects.Container;
+  private readonly quitBtn: Phaser.GameObjects.Container;
+
   /** callback the UIScene supplies to actually resume the game. */
   private onResume: () => void = () => {};
   /** callback the UIScene supplies to open the guide overlay. */
@@ -35,6 +43,8 @@ export class PauseOverlay {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    // The panel graphics is drawn around this FIXED reference centre; relayout()
+    // then shifts the whole panel object's x to the live centre on each show().
     const cx = GAME.WIDTH / 2;
     const cy = GAME.HEIGHT / 2;
 
@@ -42,22 +52,22 @@ export class PauseOverlay {
     this.root.setScrollFactor(0).setDepth(DEPTH.POPTEXT + 20).setVisible(false);
 
     // dim
-    const dim = scene.add
+    this.dim = scene.add
       .rectangle(cx, cy, GAME.WIDTH, GAME.HEIGHT, 0x05040a, 0.8)
       .setScrollFactor(0);
-    this.root.add(dim);
+    this.root.add(this.dim);
 
     // central panel
     const panelW = 1040;
     const panelH = 800;
-    const panel = scene.add.graphics();
-    panel.fillStyle(0x000000, 0.5).fillRoundedRect(cx - panelW / 2 + 10, cy - panelH / 2 + 14, panelW, panelH, 28);
-    panel.fillStyle(COLORS.PANEL, 0.98).fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 28);
-    panel.lineStyle(6, COLORS.PANEL_BORDER, 1).strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 28);
-    this.root.add(panel);
+    this.panel = scene.add.graphics();
+    this.panel.fillStyle(0x000000, 0.5).fillRoundedRect(cx - panelW / 2 + 10, cy - panelH / 2 + 14, panelW, panelH, 28);
+    this.panel.fillStyle(COLORS.PANEL, 0.98).fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 28);
+    this.panel.lineStyle(6, COLORS.PANEL_BORDER, 1).strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 28);
+    this.root.add(this.panel);
 
     // "PAUSED" heading
-    const title = scene.add
+    this.title = scene.add
       .text(cx, cy - panelH / 2 + 88, 'PAUSED', {
         fontFamily: 'Cinzel, serif',
         fontStyle: '700',
@@ -68,22 +78,38 @@ export class PauseOverlay {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
-    this.root.add(title);
+    this.root.add(this.title);
 
     // buttons (resume / guide / quit)
     const by = cy + panelH / 2 - 88;
-    const resumeBtn = this.makeButton(cx - 340, by, '재개', COLORS.GOLD, () => {
+    this.resumeBtn = this.makeButton(cx - 340, by, '재개', COLORS.GOLD, () => {
       this.resume();
     });
-    const helpBtn = this.makeButton(cx, by, '가이드', COLORS.PARCHMENT, () => {
+    this.helpBtn = this.makeButton(cx, by, '가이드', COLORS.PARCHMENT, () => {
       this.onHelp();
     });
-    const quitBtn = this.makeButton(cx + 340, by, '메뉴로', COLORS.BLOOD, () => {
+    this.quitBtn = this.makeButton(cx + 340, by, '메뉴로', COLORS.BLOOD, () => {
       this.quit();
     });
-    this.root.add(resumeBtn);
-    this.root.add(helpBtn);
-    this.root.add(quitBtn);
+    this.root.add(this.resumeBtn);
+    this.root.add(this.helpBtn);
+    this.root.add(this.quitBtn);
+  }
+
+  /**
+   * Re-centre the static chrome (dim, panel, title, buttons) for the current
+   * LIVE width. The panel graphics was drawn around GAME.WIDTH/2, so shifting
+   * its object x by (liveCx - GAME.WIDTH/2) re-centres it without a redraw.
+   */
+  private relayout(): void {
+    const w = this.scene.scale.width;
+    const cx = w / 2;
+    this.dim.setPosition(cx, GAME.HEIGHT / 2).setSize(w, GAME.HEIGHT);
+    this.panel.x = cx - GAME.WIDTH / 2;
+    this.title.setX(cx);
+    this.resumeBtn.setX(cx - 340);
+    this.helpBtn.setX(cx);
+    this.quitBtn.setX(cx + 340);
   }
 
   isVisible(): boolean {
@@ -101,6 +127,7 @@ export class PauseOverlay {
   }
 
   show(summary: PauseSummary): void {
+    this.relayout(); // re-centre chrome for the current live width first
     this.rebuildBody(summary);
     this.visible = true;
     this.root.setVisible(true);
@@ -137,7 +164,7 @@ export class PauseOverlay {
   private rebuildBody(s: PauseSummary): void {
     if (this.body) this.body.destroy();
     const scene = this.scene;
-    const cx = GAME.WIDTH / 2;
+    const cx = scene.scale.width / 2; // live width: keep the body centred
     const cy = GAME.HEIGHT / 2;
     const body = scene.add.container(0, 0).setScrollFactor(0);
     this.body = body;

@@ -37,6 +37,8 @@ export class ShopScene extends Phaser.Scene {
   private content!: Phaser.GameObjects.Container;
   /** Live banked-gold amount label (top-right). */
   private goldText!: Phaser.GameObjects.Text;
+  /** live width captured at build time; used to throttle resize restarts. */
+  private lastW = 0;
 
   constructor() {
     super(SCENES.SHOP);
@@ -44,8 +46,9 @@ export class ShopScene extends Phaser.Scene {
 
   create(): void {
     MetaState.load();
-    const W = GAME.WIDTH;
-    const H = GAME.HEIGHT;
+    const W = this.scale.width; // live (landscape-responsive) width
+    const H = GAME.HEIGHT; // fixed design height (1080)
+    this.lastW = W;
 
     this.buildBackdrop(W, H);
     this.buildTitle(W);
@@ -61,7 +64,22 @@ export class ShopScene extends Phaser.Scene {
     this.refreshGold();
     this.bindInput();
 
+    // Landscape-responsive: a restart re-centers the whole shop for the new
+    // width (rotation / resize); purchases already persist in MetaState.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    });
+
     this.cameras.main.fadeIn(350, 7, 7, 12);
+  }
+
+  /** Restart to re-center for the new width (guarded against resize thrash). */
+  private onResize(): void {
+    if (Math.abs(this.scale.width - this.lastW) > 1) {
+      this.lastW = this.scale.width;
+      this.scene.restart();
+    }
   }
 
   /* --------------------------- backdrop --------------------------- */
@@ -158,7 +176,7 @@ export class ShopScene extends Phaser.Scene {
   /** Destroy and redraw the power-up grid + unlock list. */
   private rebuild(): void {
     this.content.removeAll(true);
-    const W = GAME.WIDTH;
+    const W = this.scale.width;
 
     this.sectionHeader(W, '강화  (POWER-UPS)', 158);
     this.buildPowerups(W);

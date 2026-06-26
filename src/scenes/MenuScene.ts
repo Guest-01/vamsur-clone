@@ -65,14 +65,17 @@ export class MenuScene extends Phaser.Scene {
   private help!: HelpOverlay;
   /** transient "this character is locked" hint shown on a blocked descend. */
   private lockHint?: Phaser.GameObjects.Text;
+  /** live width captured at build time; used to throttle resize restarts. */
+  private lastW = 0;
 
   constructor() {
     super(SCENES.MENU);
   }
 
   create(): void {
-    const W = GAME.WIDTH;
-    const H = GAME.HEIGHT;
+    const W = this.scale.width; // live (landscape-responsive) width
+    const H = GAME.HEIGHT; // fixed design height (1080)
+    this.lastW = W;
 
     MetaState.load();
 
@@ -92,8 +95,24 @@ export class MenuScene extends Phaser.Scene {
     this.refreshSelection();
     this.bindInput();
 
+    // Landscape-responsive: rebuild the whole layout when the live width changes
+    // (device rotation / window resize). A restart is the simplest correct
+    // re-layout here; the selection persists via the registry.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    });
+
     // gentle fade-in for polish
     this.cameras.main.fadeIn(450, 7, 7, 12);
+  }
+
+  /** Restart to re-center for the new width (guarded against resize thrash). */
+  private onResize(): void {
+    if (Math.abs(this.scale.width - this.lastW) > 1) {
+      this.lastW = this.scale.width;
+      this.scene.restart();
+    }
   }
 
   /* --------------------------- backdrop --------------------------- */
@@ -660,7 +679,7 @@ export class MenuScene extends Phaser.Scene {
   private flashLockedHint(): void {
     this.lockHint?.destroy();
     this.lockHint = this.add
-      .text(GAME.WIDTH / 2, 900, '🔒 상점에서 해금하세요', {
+      .text(this.scale.width / 2, 900, '🔒 상점에서 해금하세요', {
         fontFamily: 'Cinzel, serif',
         fontStyle: '700',
         fontSize: '30px',
@@ -704,7 +723,7 @@ export class MenuScene extends Phaser.Scene {
     this.bg.tilePositionY += delta * 0.012;
 
     const dt = delta / 1000;
-    const W = GAME.WIDTH;
+    const W = this.scale.width;
     const H = GAME.HEIGHT;
     for (const w of this.wanderers) {
       const s = w.spr;

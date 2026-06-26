@@ -3,6 +3,7 @@ import type { CharacterDef, GameContext, PlayerLike, PlayerStats } from '../type
 import { EVENTS } from '../types';
 import { TEXTURES, SHEET } from '../config/assets';
 import { COLORS, DEPTH, ENTITY_SCALE, PLAYER } from '../config/balance';
+import { MoveInput } from '../input/MoveInput';
 
 /**
  * The player avatar. A pooled-free, single-instance Arcade sprite that reads
@@ -133,10 +134,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite implements PlayerLike {
 
     const dt = delta / 1000;
 
-    // --- read directional input (WASD + arrows) ---
+    // --- read directional input: touch joystick takes precedence, else keys ---
     let dx = 0;
     let dy = 0;
-    if (this.cursors) {
+    let analog = false;
+    if (MoveInput.active) {
+      // Joystick vector already lies in the unit disk (analog magnitude/speed).
+      dx = MoveInput.x;
+      dy = MoveInput.y;
+      analog = true;
+    } else if (this.cursors) {
       if (this.keyA.isDown || this.cursors.left.isDown) dx -= 1;
       if (this.keyD.isDown || this.cursors.right.isDown) dx += 1;
       if (this.keyW.isDown || this.cursors.up.isDown) dy -= 1;
@@ -146,19 +153,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite implements PlayerLike {
     const moving = (dx !== 0 || dy !== 0) && this.isAlive;
 
     if (moving) {
-      // Normalised direction × moveSpeed → consistent diagonal speed.
-      this.moveVec.set(dx, dy).normalize();
+      if (analog) {
+        // Preserve analog magnitude (cap at 1 so it never exceeds full speed).
+        this.moveVec.set(dx, dy);
+        const len = this.moveVec.length();
+        if (len > 1) this.moveVec.scale(1 / len);
+      } else {
+        // Keyboard: normalise so diagonals aren't faster.
+        this.moveVec.set(dx, dy).normalize();
+      }
       body.setVelocity(
         this.moveVec.x * this.stats.moveSpeed,
         this.moveVec.y * this.stats.moveSpeed
       );
 
-      // Remember facing only while actually moving (keep last when idle).
-      this.facing.set(this.moveVec.x, this.moveVec.y);
+      // Facing must be a UNIT vector for weapon aiming.
+      const fl = this.moveVec.length() || 1;
+      this.facing.set(this.moveVec.x / fl, this.moveVec.y / fl);
 
-      // Flip the sprite toward horizontal movement; preserve facing on pure-vertical.
-      if (dx < 0) this.setFlipX(true);
-      else if (dx > 0) this.setFlipX(false);
+      // Flip toward horizontal movement (small dead-band avoids jitter).
+      if (this.moveVec.x < -0.05) this.setFlipX(true);
+      else if (this.moveVec.x > 0.05) this.setFlipX(false);
     } else {
       body.setVelocity(0, 0);
     }

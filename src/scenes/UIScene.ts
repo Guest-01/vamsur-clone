@@ -13,6 +13,7 @@ import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { PauseOverlay } from '../ui/PauseOverlay';
 import { HelpOverlay } from '../ui/HelpOverlay';
 import type { PauseSummary } from '../ui/PauseOverlay';
+import { VirtualJoystick } from '../ui/VirtualJoystick';
 // Type-only import so we can type the GameScene reference for getHudSnapshot().
 import type { GameScene } from './GameScene';
 
@@ -32,6 +33,12 @@ interface HudState {
 
 // Depth for the HUD layer — above gameplay/vignette, below the overlays.
 const HUD_DEPTH = DEPTH.POPTEXT + 10;
+
+// On-screen (mobile) pause button geometry — right-anchored under the
+// kills/gold panel so the two never overlap.
+const PAUSE_BTN_SIZE = 64;
+const PAUSE_BTN_MARGIN = 32;
+const PAUSE_BTN_Y = 204;
 
 /**
  * Heads-up display. Runs on top of GameScene (scene.launch) and is NEVER paused,
@@ -57,7 +64,9 @@ export class UIScene extends Phaser.Scene {
 
   // --- HUD elements ---
   private xpBarFill!: Phaser.GameObjects.Rectangle;
-  private xpBarWidth = GAME.WIDTH; // full track width
+  private xpBarTrack!: Phaser.GameObjects.Rectangle;
+  private xpBarHighlight!: Phaser.GameObjects.Rectangle;
+  private xpBarWidth: number = GAME.WIDTH; // full track width (live width at runtime)
   private levelBadgeText!: Phaser.GameObjects.Text;
 
   private timerText!: Phaser.GameObjects.Text;
@@ -69,10 +78,17 @@ export class UIScene extends Phaser.Scene {
 
   private killsText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
+  /** right-anchored container wrapping the kills/gold panel (x = live width). */
+  private topRight!: Phaser.GameObjects.Container;
 
   private trayContainer!: Phaser.GameObjects.Container;
 
   private hitFlash!: Phaser.GameObjects.Rectangle;
+  private vignette!: Phaser.GameObjects.Image;
+
+  // --- touch controls (mobile) ---
+  private joystick?: VirtualJoystick;
+  private pauseButton!: Phaser.GameObjects.Container;
 
   // --- tweens we keep handles to so they can be retargeted/cancelled ---
   private xpTween?: Phaser.Tweens.Tween;
@@ -116,7 +132,7 @@ export class UIScene extends Phaser.Scene {
     // draws the vignette + drifting dust above the world but below the HUD.
     this.add
       .particles(0, 0, TEXTURES.PARTICLE, {
-        x: { min: 0, max: GAME.WIDTH },
+        x: { min: 0, max: this.scale.width },
         y: { min: 0, max: GAME.HEIGHT },
         lifespan: 4200,
         speedX: { min: -8, max: 8 },
@@ -133,10 +149,10 @@ export class UIScene extends Phaser.Scene {
       // below every HUD widget (HUD_DEPTH = 60) and the overlays (70–80).
       .setDepth(2);
 
-    this.add
+    this.vignette = this.add
       .image(0, 0, TEXTURES.VIGNETTE)
       .setOrigin(0, 0)
-      .setDisplaySize(GAME.WIDTH, GAME.HEIGHT)
+      .setDisplaySize(this.scale.width, GAME.HEIGHT)
       .setScrollFactor(0)
       // sits just above the dust, still well below the HUD/overlays.
       .setDepth(3);
@@ -170,8 +186,58 @@ export class UIScene extends Phaser.Scene {
     this.escKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.escKey?.on('down', () => this.onEsc());
 
+    // Touch controls (mobile): floating joystick for movement (writes MoveInput,
+    // ignores mouse) + an on-screen pause button (no ESC on touch devices).
+    this.joystick = new VirtualJoystick(this);
+    this.buildPauseButton();
+
+    // Landscape-responsive: reposition the width-dependent HUD pieces when the
+    // live width changes. We do NOT restart (it would desync the running game /
+    // close overlays); reflow only while no overlay is up.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+
     // Cleanly detach all listeners + DOM handlers when the scene stops.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown(gameEvents));
+  }
+
+  /* --------------------------------------------------------------- */
+  /* Landscape-responsive reflow                                     */
+  /* --------------------------------------------------------------- */
+
+  /**
+   * Reposition the width-dependent HUD on resize/rotation. Skipped while any
+   * overlay is visible (re-laying out under a modal can desync / softlock it;
+   * the overlays re-centre themselves on their next show()).
+   */
+  private onResize(): void {
+    if (
+      this.levelUpOverlay.isVisible() ||
+      this.pauseOverlay.isVisible() ||
+      this.helpOverlay.isVisible()
+    )
+      return;
+
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    // full-width XP bar (track + fill + highlight)
+    this.xpBarWidth = w;
+    this.xpBarTrack.width = w;
+    this.xpBarHighlight.width = w;
+    this.refreshXp(false);
+
+    // centred timer
+    this.timerText.x = w / 2;
+
+    // right-anchored kills/gold group
+    this.topRight.x = w;
+
+    // full-screen hit-flash + vignette
+    this.hitFlash.setPosition(w / 2, h / 2).setSize(w, h);
+    this.vignette.setDisplaySize(w, h);
+
+    // right-anchored pause button
+    this.pauseButton.x = w - PAUSE_BTN_MARGIN - PAUSE_BTN_SIZE / 2;
   }
 
   /* --------------------------------------------------------------- */
@@ -206,6 +272,8 @@ export class UIScene extends Phaser.Scene {
     this.levelUpOverlay?.destroy();
     this.pauseOverlay?.destroy();
     this.helpOverlay?.destroy();
+    this.joystick?.destroy();
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
   }
 
   /* --------------------------------------------------------------- */
@@ -316,25 +384,27 @@ export class UIScene extends Phaser.Scene {
   private buildXpBar(): void {
     const barH = 24;
     const y = barH / 2;
+    const w = this.scale.width; // live full-screen width
+    this.xpBarWidth = w;
 
     // dark track
-    const track = this.add
-      .rectangle(0, 0, GAME.WIDTH, barH, COLORS.XP_BAR_DARK, 1)
+    this.xpBarTrack = this.add
+      .rectangle(0, 0, w, barH, COLORS.XP_BAR_DARK, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH);
-    track.setStrokeStyle(0);
+    this.xpBarTrack.setStrokeStyle(0);
 
     // fill
     this.xpBarFill = this.add
-      .rectangle(0, 0, GAME.WIDTH, barH, COLORS.XP_BAR, 1)
+      .rectangle(0, 0, w, barH, COLORS.XP_BAR, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH + 1);
 
     // a brighter top highlight line for a glassy feel
-    this.add
-      .rectangle(0, 0, GAME.WIDTH, 4, 0xffffff, 0.22)
+    this.xpBarHighlight = this.add
+      .rectangle(0, 0, w, 4, 0xffffff, 0.22)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH + 2);
@@ -367,14 +437,12 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH + 2);
-
-    void track;
   }
 
   /** Large mm:ss timer centred just below the XP bar. */
   private buildTimer(): void {
     this.timerText = this.add
-      .text(GAME.WIDTH / 2, 60, '00:00', {
+      .text(this.scale.width / 2, 60, '00:00', {
         fontFamily: '"Press Start 2P"',
         fontSize: '40px',
         color: '#e8e0d0',
@@ -456,21 +524,31 @@ export class UIScene extends Phaser.Scene {
     void frame;
   }
 
-  /** Top-right: kills (skull) and gold (coin) counters. */
+  /**
+   * Top-right: kills (skull) and gold (coin) counters. Wrapped in a container
+   * anchored to the LIVE right edge (container.x = screen width), so every child
+   * is laid out with NEGATIVE x offsets and onResize() only nudges container.x.
+   */
   private buildTopRight(): void {
-    const rightX = GAME.WIDTH - 32;
     const topY = 44;
+    const rightX = -32; // local: right edge of the group sits at container.x
+
+    this.topRight = this.add
+      .container(this.scale.width, 0)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH);
 
     // panel behind the counters
     const panelW = 280;
     const panelH = 112;
-    const panel = this.add.graphics().setScrollFactor(0).setDepth(HUD_DEPTH);
+    const panel = this.add.graphics();
     panel
       .fillStyle(COLORS.PANEL, 0.85)
       .fillRoundedRect(rightX - panelW, topY, panelW, panelH, 12);
     panel
       .lineStyle(4, COLORS.PANEL_BORDER, 1)
       .strokeRoundedRect(rightX - panelW, topY, panelW, panelH, 12);
+    this.topRight.add(panel);
 
     const iconX = rightX - panelW + 44;
 
@@ -481,10 +559,8 @@ export class UIScene extends Phaser.Scene {
         fontSize: '36px',
         color: '#e8e0d0',
       })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(HUD_DEPTH + 1);
-    void skull;
+      .setOrigin(0.5);
+    this.topRight.add(skull);
 
     this.killsText = this.add
       .text(iconX + 36, topY + 32, '0', {
@@ -492,17 +568,14 @@ export class UIScene extends Phaser.Scene {
         fontSize: '24px',
         color: '#e8e0d0',
       })
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(HUD_DEPTH + 1);
+      .setOrigin(0, 0.5);
+    this.topRight.add(this.killsText);
 
     // gold row — coin sprite (sheet frame) + count.
     const coin = this.add
       .image(iconX, topY + 80, TEXTURES.SPRITES, FRAMES.COINS)
-      .setScale(2.8)
-      .setScrollFactor(0)
-      .setDepth(HUD_DEPTH + 1);
-    void coin;
+      .setScale(2.8);
+    this.topRight.add(coin);
 
     this.goldText = this.add
       .text(iconX + 36, topY + 80, '0', {
@@ -510,9 +583,8 @@ export class UIScene extends Phaser.Scene {
         fontSize: '24px',
         color: '#f0d896',
       })
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(HUD_DEPTH + 1);
+      .setOrigin(0, 0.5);
+    this.topRight.add(this.goldText);
   }
 
   /** Bottom-left tray container for weapon + item icon slots. */
@@ -525,11 +597,56 @@ export class UIScene extends Phaser.Scene {
 
   /** Red full-screen flash used on PLAYER_HIT. */
   private buildHitFlash(): void {
+    const w = this.scale.width;
     this.hitFlash = this.add
-      .rectangle(GAME.WIDTH / 2, GAME.HEIGHT / 2, GAME.WIDTH, GAME.HEIGHT, COLORS.BLOOD, 1)
+      .rectangle(w / 2, GAME.HEIGHT / 2, w, GAME.HEIGHT, COLORS.BLOOD, 1)
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH + 5)
       .setAlpha(0);
+  }
+
+  /**
+   * On-screen pause button (mobile has no ESC). Gothic framed square with a
+   * pause glyph, anchored to the LIVE right edge under the kills/gold panel.
+   * Sits above the HUD and the joystick chrome so taps reach it, not the
+   * joystick catch-zone (which is at a much lower depth).
+   */
+  private buildPauseButton(): void {
+    const size = PAUSE_BTN_SIZE;
+    const c = this.add
+      .container(this.scale.width - PAUSE_BTN_MARGIN - size / 2, PAUSE_BTN_Y)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH + 8);
+
+    const bg = this.add.graphics();
+    const draw = (hot: boolean): void => {
+      bg.clear();
+      bg.fillStyle(hot ? COLORS.PANEL_LIGHT : COLORS.PANEL, 0.92).fillRoundedRect(-size / 2, -size / 2, size, size, 12);
+      bg.lineStyle(4, COLORS.GOLD, hot ? 1 : 0.8).strokeRoundedRect(-size / 2, -size / 2, size, size, 12);
+      // two pause bars
+      bg.fillStyle(COLORS.GOLD_LIGHT, 1);
+      bg.fillRect(-12, -16, 8, 32);
+      bg.fillRect(4, -16, 8, 32);
+    };
+    draw(false);
+    c.add(bg);
+
+    const zone = this.add.zone(0, 0, size, size).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => draw(true));
+    zone.on('pointerout', () => draw(false));
+    zone.on('pointerdown', () => this.onPauseButton());
+    c.add(zone);
+
+    this.pauseButton = c;
+  }
+
+  /** Tap handler for the on-screen pause button — mirrors the ESC/open path. */
+  private onPauseButton(): void {
+    // Do nothing if a modal is already up (level-up choice / already paused).
+    if (this.levelUpOverlay.isVisible() || this.pauseOverlay.isVisible()) return;
+    this.scene.pause(SCENES.GAME);
+    this.pauseOpenedAt = this.time.now;
+    this.pauseOverlay.show(this.buildPauseSummary());
   }
 
   /* --------------------------------------------------------------- */
