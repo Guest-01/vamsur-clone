@@ -540,7 +540,7 @@ export class MenuScene extends Phaser.Scene {
     // CC0 credit
     this.add
       .text(W - 16, H - 12, 'Art: Kenney — CC0', {
-        fontFamily: 'Press Start 2P, monospace',
+        fontFamily: '"Press Start 2P"',
         fontSize: '16px',
         color: hex(COLORS.TEXT_DIM),
       })

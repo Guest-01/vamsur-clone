@@ -409,5 +409,59 @@ export class TextureFactory {
       g.fillStyle(0xc4ccd8, 1).fillRect(9, 11, 3, 28);
       outline(g);
     });
+    // ECHO (projectile amount) — twin chevrons, the back one fainter
+    mk(TEXTURES.ICON_ECHO, (g) => {
+      const chevron = (x: number) => [
+        new Phaser.Math.Vector2(x, 10),
+        new Phaser.Math.Vector2(x + 7, 10),
+        new Phaser.Math.Vector2(x + 18, 24),
+        new Phaser.Math.Vector2(x + 7, 38),
+        new Phaser.Math.Vector2(x, 38),
+        new Phaser.Math.Vector2(x + 11, 24),
+      ];
+      g.fillStyle(0x9ad0ff, 0.55);
+      g.fillPoints(chevron(8), true);
+      g.fillStyle(0xeef2f7, 1);
+      g.fillPoints(chevron(22), true);
+    });
+    // CLOAK (dodge) — hooded phantom with a jagged hem
+    mk(TEXTURES.ICON_CLOAK, (g) => {
+      g.fillStyle(0x584a86, 1);
+      g.fillPoints(
+        [
+          new Phaser.Math.Vector2(24, 5),
+          new Phaser.Math.Vector2(37, 16),
+          new Phaser.Math.Vector2(39, 42),
+          new Phaser.Math.Vector2(31, 35),
+          new Phaser.Math.Vector2(24, 42),
+          new Phaser.Math.Vector2(17, 35),
+          new Phaser.Math.Vector2(9, 42),
+          new Phaser.Math.Vector2(11, 16),
+        ],
+        true
+      );
+      g.fillStyle(0x0a0a12, 1).fillEllipse(24, 20, 16, 14); // hood shadow
+      g.fillStyle(0xffffff, 0.18).fillCircle(15, 13, 3);
+    });
+    // LEAF (hp regen) — sprouting leaf with a stem
+    mk(TEXTURES.ICON_LEAF, (g) => {
+      g.fillStyle(0x49b04a, 1);
+      g.fillPoints(
+        [
+          new Phaser.Math.Vector2(24, 6),
+          new Phaser.Math.Vector2(36, 14),
+          new Phaser.Math.Vector2(38, 27),
+          new Phaser.Math.Vector2(24, 40),
+          new Phaser.Math.Vector2(10, 27),
+          new Phaser.Math.Vector2(12, 14),
+        ],
+        true
+      );
+      g.lineStyle(2, 0x2f7a30, 1);
+      g.lineBetween(24, 10, 24, 36);
+      g.lineBetween(24, 22, 32, 17);
+      g.lineBetween(24, 22, 16, 17);
+      g.fillStyle(0x7a4a28, 1).fillRect(22, 38, 4, 7);
+    });
   }
 }

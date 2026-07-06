@@ -179,10 +179,13 @@ export class ShopScene extends Phaser.Scene {
     const W = this.scale.width;
 
     this.sectionHeader(W, '강화  (POWER-UPS)', 158);
-    this.buildPowerups(W);
+    const gridBottom = this.buildPowerups(W);
 
-    this.sectionHeader(W, '해금  (UNLOCKS)', 646);
-    this.buildUnlocks(W, 646);
+    // The unlock section sits below however tall the power-up grid came out
+    // (the grid row count depends on the live width).
+    const unlocksY = Math.max(646, gridBottom + 56);
+    this.sectionHeader(W, '해금  (UNLOCKS)', unlocksY);
+    this.buildUnlocks(W, unlocksY);
   }
 
   /** A left-aligned section heading with an underline, in the content layer. */
@@ -208,13 +211,21 @@ export class ShopScene extends Phaser.Scene {
 
   /* --------------------------- power-ups -------------------------- */
 
-  private buildPowerups(W: number): void {
+  /** Lay out the power-up grid; returns the grid's bottom Y. */
+  private buildPowerups(W: number): number {
     const defs = Object.values(POWERUPS);
-    const cols = 4;
-    const cellW = 440;
-    const cellH = 120;
+    const margin = 56;
     const colGap = 24;
-    const rowGap = 22;
+    // Fit as many columns as the live width allows at a comfortable minimum
+    // cell width (the power-up list outgrew the old fixed 4x3 grid).
+    const usable = W - margin * 2;
+    const cols = Phaser.Math.Clamp(Math.floor((usable + colGap) / (300 + colGap)), 3, 6);
+    const cellW = Math.min(440, Math.floor((usable - (cols - 1) * colGap) / cols));
+    const rows = Math.ceil(defs.length / cols);
+    // Compress rows when the grid is tall so UNLOCKS + the back button still
+    // fit inside the fixed 1080 design height.
+    const cellH = rows <= 3 ? 120 : rows === 4 ? 112 : 96;
+    const rowGap = rows <= 3 ? 22 : 14;
     const totalW = cols * cellW + (cols - 1) * colGap;
     const startX = W / 2 - totalW / 2 + cellW / 2;
     const gridTop = 196;
@@ -226,6 +237,8 @@ export class ShopScene extends Phaser.Scene {
       const cy = gridTop + cellH / 2 + row * (cellH + rowGap);
       this.buildPowerupCell(def, cx, cy, cellW, cellH);
     });
+
+    return gridTop + rows * (cellH + rowGap) - rowGap;
   }
 
   private buildPowerupCell(
@@ -247,21 +260,24 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT);
     this.content.add(panel);
 
+    // Vertical rhythm scales with the (possibly compressed) cell height.
+    const rowOff = Math.round(cellH * 0.27);
+
     // icon (left)
     const icon = this.add
-      .image(cx - cellW / 2 + 52, cy, TEXTURES.PIXEL)
+      .image(cx - cellW / 2 + 46, cy, TEXTURES.PIXEL)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 1);
-    this.applyIcon(icon, def.icon, ENTITY_SCALE * 2.6);
+    this.applyIcon(icon, def.icon, ENTITY_SCALE * 2.3);
     this.content.add(icon);
 
-    const textLeft = cx - cellW / 2 + 98;
+    const textLeft = cx - cellW / 2 + 86;
 
     const name = this.add
-      .text(textLeft, cy - 34, def.name, {
+      .text(textLeft, cy - rowOff, def.name, {
         fontFamily: 'Cinzel, serif',
         fontStyle: '700',
-        fontSize: '24px',
+        fontSize: '22px',
         color: hex(maxed ? COLORS.GOLD_LIGHT : COLORS.BONE),
       })
       .setOrigin(0, 0.5)
@@ -269,9 +285,9 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT + 1);
 
     const lvl = this.add
-      .text(textLeft, cy + 2, `Lv ${level}/${def.maxLevel}`, {
+      .text(textLeft, cy + 1, `Lv ${level}/${def.maxLevel}`, {
         fontFamily: 'Cinzel, serif',
-        fontSize: '19px',
+        fontSize: '18px',
         color: hex(COLORS.PARCHMENT),
       })
       .setOrigin(0, 0.5)
@@ -280,15 +296,15 @@ export class ShopScene extends Phaser.Scene {
     this.content.add([name, lvl]);
 
     // pips
-    this.buildPips(textLeft, cy + 32, level, def.maxLevel);
+    this.buildPips(textLeft, cy + rowOff, level, def.maxLevel);
 
     // cost / MAX (right)
     if (maxed) {
       const max = this.add
-        .text(cx + cellW / 2 - 28, cy, 'MAX', {
+        .text(cx + cellW / 2 - 24, cy, 'MAX', {
           fontFamily: 'Cinzel, serif',
           fontStyle: '700',
-          fontSize: '28px',
+          fontSize: '26px',
           color: hex(COLORS.GOLD_LIGHT),
         })
         .setOrigin(1, 0.5)
@@ -297,15 +313,15 @@ export class ShopScene extends Phaser.Scene {
       this.content.add(max);
     } else {
       const coin = this.add
-        .image(cx + cellW / 2 - 96, cy, TEXTURES.SPRITES, FRAMES.COINS)
+        .image(cx + cellW / 2 - 86, cy, TEXTURES.SPRITES, FRAMES.COINS)
         .setScale(ENTITY_SCALE * 0.95)
         .setScrollFactor(0)
         .setDepth(DEPTH.POPTEXT + 1);
       const costTxt = this.add
-        .text(cx + cellW / 2 - 76, cy, `${cost}`, {
+        .text(cx + cellW / 2 - 66, cy, `${cost}`, {
           fontFamily: 'Cinzel, serif',
           fontStyle: '700',
-          fontSize: '26px',
+          fontSize: '24px',
           color: hex(affordable ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT),
         })
         .setOrigin(0, 0.5)
@@ -395,11 +411,13 @@ export class ShopScene extends Phaser.Scene {
 
     const n = entries.length;
     const cellW = 288;
-    const cellH = 176;
+    const cellH = 168;
     const gap = 20;
     const totalW = n * cellW + (n - 1) * gap;
     const startX = W / 2 - totalW / 2 + cellW / 2;
-    const cy = headerY + 132;
+    // Sits right under the header; compact enough to clear the back button
+    // even when a tall power-up grid pushed the whole section down.
+    const cy = headerY + 116;
 
     entries.forEach((e, i) => {
       const cx = startX + i * (cellW + gap);
@@ -424,14 +442,14 @@ export class ShopScene extends Phaser.Scene {
     this.content.add(panel);
 
     const portrait = this.add
-      .image(cx, cy - 44, TEXTURES.PIXEL)
+      .image(cx, cy - 40, TEXTURES.PIXEL)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 1);
     this.applyIcon(portrait, e.icon, ENTITY_SCALE * 3.0);
     this.content.add(portrait);
 
     const name = this.add
-      .text(cx, cy + 28, e.name, {
+      .text(cx, cy + 24, e.name, {
         fontFamily: 'Cinzel, serif',
         fontStyle: '700',
         fontSize: '24px',
@@ -442,7 +460,7 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT + 1);
 
     const cost = this.add
-      .text(cx, cy + 62, `🔒 ${e.cost}`, {
+      .text(cx, cy + 56, `🔒 ${e.cost}`, {
         fontFamily: 'Cinzel, serif',
         fontStyle: '700',
         fontSize: '24px',

@@ -92,7 +92,7 @@ export const POWERUPS: Record<string, PowerUpDef> = {
     id: 'regen',
     name: 'Recovery',
     description: '시작 체력 재생 +0.4/s / 레벨',
-    icon: sheet(FRAMES.POTION_GREEN),
+    icon: gen(TEXTURES.ICON_LEAF),
     maxLevel: 5,
     costPerLevel: 30,
     apply: (s, lvl) => {
@@ -141,6 +141,72 @@ export const POWERUPS: Record<string, PowerUpDef> = {
     costPerLevel: 150,
     apply: (s, lvl) => {
       s.revives += lvl;
+    },
+  },
+  precision: {
+    id: 'precision',
+    name: 'Precision',
+    description: '시작 치명타율 +2% / 레벨',
+    icon: sheet(FRAMES.SWORD_RED),
+    maxLevel: 5,
+    costPerLevel: 40,
+    apply: (s, lvl) => {
+      s.critChance += 0.02 * lvl;
+    },
+  },
+  cruelty: {
+    id: 'cruelty',
+    name: 'Cruelty',
+    description: '시작 치명타 피해 +10% / 레벨',
+    icon: sheet(FRAMES.HAMMER),
+    maxLevel: 5,
+    costPerLevel: 40,
+    apply: (s, lvl) => {
+      s.critMult += 0.1 * lvl;
+    },
+  },
+  evasion: {
+    id: 'evasion',
+    name: 'Evasion',
+    description: '시작 회피 +2% / 레벨',
+    icon: gen(TEXTURES.ICON_CLOAK),
+    maxLevel: 3,
+    costPerLevel: 60,
+    apply: (s, lvl) => {
+      s.dodge += 0.02 * lvl;
+    },
+  },
+  velocity: {
+    id: 'velocity',
+    name: 'Velocity',
+    description: '시작 투사체 속도 +4% / 레벨',
+    icon: gen(TEXTURES.ICON_WING),
+    maxLevel: 5,
+    costPerLevel: 25,
+    apply: (s, lvl) => {
+      s.projectileSpeed += 0.04 * lvl;
+    },
+  },
+  endurance: {
+    id: 'endurance',
+    name: 'Endurance',
+    description: '시작 지속시간 +5% / 레벨',
+    icon: sheet(FRAMES.BOTTLE),
+    maxLevel: 5,
+    costPerLevel: 25,
+    apply: (s, lvl) => {
+      s.duration += 0.05 * lvl;
+    },
+  },
+  multishot: {
+    id: 'multishot',
+    name: 'Multishot',
+    description: '시작 투사체/효과 개수 +1 (고가의 최종 강화)',
+    icon: gen(TEXTURES.ICON_ECHO),
+    maxLevel: 1,
+    costPerLevel: 400,
+    apply: (s, lvl) => {
+      s.amount += lvl;
     },
   },
 };

@@ -153,7 +153,7 @@ export class GameOverScene extends Phaser.Scene {
     const timeColor = this.newBest ? COLORS.GOLD_LIGHT : COLORS.BONE;
     const timeLabel = this.add
       .text(W / 2, cy, formatTime(s.timeMs), {
-        fontFamily: 'Press Start 2P, monospace',
+        fontFamily: '"Press Start 2P"',
         fontSize: '52px',
         color: hex(timeColor),
       })
@@ -192,7 +192,7 @@ export class GameOverScene extends Phaser.Scene {
       const x = W / 2 + (i - 1) * spread;
       this.add
         .text(x, row, c.label, {
-          fontFamily: 'Press Start 2P, monospace',
+          fontFamily: '"Press Start 2P"',
           fontSize: '18px',
           color: hex(COLORS.TEXT_DIM),
         })
@@ -200,7 +200,7 @@ export class GameOverScene extends Phaser.Scene {
         .setDepth(DEPTH.POPTEXT);
       this.add
         .text(x, row + 44, c.value, {
-          fontFamily: 'Press Start 2P, monospace',
+          fontFamily: '"Press Start 2P"',
           fontSize: '32px',
           color: hex(c.color),
         })
@@ -250,15 +250,25 @@ export class GameOverScene extends Phaser.Scene {
       const icon = this.add.image(x, y - 6, TEXTURES.PIXEL).setDepth(DEPTH.POPTEXT);
       this.applyIcon(icon, e.icon, ENTITY_SCALE * 2.8);
 
-      // level / max pip
-      this.add
-        .text(x + slot / 2 - 6, y + slot / 2 - 6, `${e.level}/${e.maxLevel}`, {
-          fontFamily: 'Press Start 2P, monospace',
+      // level / max pip, on a small backing chip so it stays legible over any icon
+      const pipLabel = `${e.level}/${e.maxLevel}`;
+      const pipText = this.add
+        .text(0, 0, pipLabel, {
+          fontFamily: '"Press Start 2P"',
           fontSize: '16px',
           color: e.level >= e.maxLevel ? hex(COLORS.GOLD_LIGHT) : hex(COLORS.BONE),
         })
         .setOrigin(1, 1)
         .setDepth(DEPTH.POPTEXT + 1);
+      const chipW = pipText.width + 10;
+      const chipH = pipText.height + 4;
+      const chipX = x + slot / 2 - 2;
+      const chipY = y + slot / 2 - 2;
+      this.add
+        .rectangle(chipX, chipY, chipW, chipH, 0x0a0a12, 0.82)
+        .setOrigin(1, 1)
+        .setDepth(DEPTH.POPTEXT);
+      pipText.setPosition(chipX - 5, chipY - 2);
     });
   }
 

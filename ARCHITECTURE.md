@@ -5,6 +5,14 @@ Kenney's CC0 *Tiny Dungeon* spritesheet (`tiles`, 16×16 frames) plus procedural
 textures. This document is the authoritative contract: implement to these exact
 signatures so the parts integrate.
 
+> **Status note:** the implementation has since grown past this original build
+> spec — 5 characters, 10 weapons, 18 passive items, a persistent meta shop
+> (`state/MetaState.ts`, `scenes/ShopScene.ts`), landscape-responsive scaling
+> and touch controls (`input/`, `ui/VirtualJoystick.ts`). The core architecture
+> described here (GameContext, pooling, events, scene flow) still holds; where
+> a detail (counts, exact numbers, layout sizes) disagrees with the code, the
+> code is current.
+
 Read these files first — they are the single source of truth and already exist:
 
 - `src/types.ts` — all shared interfaces, `SCENES`, `EVENTS`, `REGISTRY`, `GameContext`.
@@ -22,6 +30,9 @@ Read these files first — they are the single source of truth and already exist
    from `types.ts`, `config/*`, `content/*`, `systems/stats.ts`, and `gfx/*`.
    Systems may import the content registries (`WEAPONS`, `ITEMS`, `ENEMIES`,
    `CHARACTERS`, `WAVES`). UI/scene code reads live state via events + a snapshot.
+   **Two sanctioned exceptions:** a system that OWNS a pool imports its pooled
+   entity class (`EnemySpawner` → `Enemy`, `WeaponSystem` → `Projectile`), and
+   the GameScene — as the integrator — imports every concrete class it wires.
 2. **`import Phaser from 'phaser'`** at the top of every file using Phaser.
 3. **One shared `PlayerStats` object.** `player.stats === ctx.stats`. Upgrades
    mutate it via `ctx.recomputeStats()`; never replace the reference.
@@ -74,6 +85,11 @@ e.spawn(ctx, def, x, y);   // activates + positions + resets state
 
 `getFirstDead` returns an inactive (`active === false`) member. Entities call
 `this.deactivate()` (disable body, `setActive(false).setVisible(false)`) when done.
+
+Because instances are recycled, a sprite reference alone can't identify "the
+same enemy" across time: `Enemy.spawn()` increments a public `spawnGen` counter,
+and any system keying per-enemy state on the sprite (e.g. the orbit weapon's
+re-hit cooldown map) must store + compare `spawnGen` to detect recycling.
 
 ---
 
@@ -241,6 +257,10 @@ implements all `GameContext` helpers.
 - `recomputeStats()` → `recomputeStats(stats, character, run.ownedItems)` (from `systems/stats.ts`); then clamp `player.hp <= maxHp`; emit nothing (callers emit as needed).
 - `queueLevelUp()` as above. `shakeCamera(i,d)` → `cameras.main.shake(d ?? 150, i ?? 0.005)`.
 - `popText(x,y,text,color?)`: floating `Text` (font Press Start 2P ~10px), depth `DEPTH.POPTEXT`, tween up + fade then destroy (pool if easy). Keep them cheap.
+- `hitSparkAt(x,y)` / `deathPoofAt(x,y)` / `collectBurstAt(x,y,tint,quantity?)`:
+  pooled one-shot FX. GameScene owns one persistent particle emitter per effect
+  and `explode()`s it at the given position — never allocate + destroy an
+  emitter per hit/death/collect (bosses' big death poof is the one exception).
 
 `onPlayerTouchEnemy(playerObj, enemyObj)`: `player.takeDamage((enemy as Enemy).contactDamage)` (i-frames gate spam).
 

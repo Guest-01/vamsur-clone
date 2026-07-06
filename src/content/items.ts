@@ -74,7 +74,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'duplicator',
     name: 'Echo Charm',
     description: '투사체/효과 개수가 늘어난다.',
-    icon: sheet(FRAMES.DAGGER),
+    icon: gen(TEXTURES.ICON_ECHO),
     maxLevel: 3,
     weight: 4,
     apply: (s, lvl) => {
@@ -134,7 +134,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'pummarola',
     name: 'Heartroot',
     description: '체력이 서서히 회복된다.',
-    icon: sheet(FRAMES.POTION_GREEN),
+    icon: gen(TEXTURES.ICON_LEAF),
     maxLevel: 5,
     weight: 5,
     apply: (s, lvl) => {
@@ -170,7 +170,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'phantomCloak',
     name: 'Phantom Cloak',
     description: '확률적으로 피해를 회피한다.',
-    icon: sheet(FRAMES.POTION_BLUE),
+    icon: gen(TEXTURES.ICON_CLOAK),
     maxLevel: 5,
     weight: 4,
     apply: (s, lvl) => {

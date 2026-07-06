@@ -13,6 +13,20 @@ import { TEXTURES, FRAMES } from '../config/assets';
 import { COLORS, DEPTH, ENTITY_SCALE } from '../config/balance';
 import { Projectile } from '../entities/Projectile';
 
+/**
+ * One orbit re-hit cooldown entry. Enemies are pooled, so the sprite reference
+ * alone can't identify "the same enemy" — a dead instance may be recycled as a
+ * brand-new enemy within the same frame (weapon update runs before the
+ * spawner). `gen` snapshots enemy.spawnGen at hit time; a mismatch means the
+ * instance was recycled and the cooldown no longer applies.
+ */
+interface RehitEntry {
+  /** ms remaining until this enemy can be hit by this weapon again */
+  left: number;
+  /** enemy.spawnGen captured when the cooldown was set */
+  gen: number;
+}
+
 /** Per-owned-weapon runtime state (timer, level, persistent visuals). */
 interface WeaponState {
   id: WeaponId;
@@ -27,11 +41,12 @@ interface WeaponState {
   /** current orbit phase angle (radians), advanced each frame */
   orbitPhase: number;
   /**
-   * Per-orbit, per-enemy re-hit cooldowns (ms remaining). Keyed by enemy.
-   * Orbit + aura tick continuously, so a given enemy must respect cooldownMs
-   * between consecutive damage instances.
+   * Per-enemy re-hit cooldowns for orbit contact damage. Orbits tick
+   * continuously, so a given enemy must respect cooldownMs between
+   * consecutive damage instances. (Aura doesn't use this — it damages
+   * everything in radius on its own tick timer.)
    */
-  rehit: Map<EnemySprite, number>;
+  rehit: Map<EnemySprite, RehitEntry>;
 }
 
 /**
@@ -382,23 +397,47 @@ export class WeaponSystem implements IWeaponSystem {
     }
   }
 
+  /** scratch buffers for pickNearestTargets — reused across fires so a
+   *  multi-shot weapon doesn't allocate + sort the whole enemy list per shot.
+   *  The returned array is only valid until the next call. */
+  private readonly nearScratch: EnemySprite[] = [];
+  private readonly nearDistSq: number[] = [];
+
   /**
-   * Pick up to `n` nearest distinct enemies. Uses ctx.getNearestEnemy as the
-   * primary source; for additional targets it scans the radius and sorts.
+   * Pick up to `n` nearest distinct enemies in a single pass over the enemy
+   * pool (insertion into a tiny sorted top-n buffer; n is the projectile
+   * count, so a handful at most — no full sort, no per-fire allocation).
    */
   private pickNearestTargets(x: number, y: number, n: number): EnemySprite[] {
     if (n <= 1) {
       const nearest = this.ctx.getNearestEnemy(x, y);
       return nearest ? [nearest] : [];
     }
-    // Gather a generous pool and sort by distance, take the closest n.
-    const pool = this.ctx.getEnemiesInRadius(x, y, 9999);
-    pool.sort(
-      (a, b) =>
-        Phaser.Math.Distance.Squared(x, y, a.x, a.y) -
-        Phaser.Math.Distance.Squared(x, y, b.x, b.y)
-    );
-    return pool.slice(0, n);
+    const out = this.nearScratch;
+    const d2s = this.nearDistSq;
+    out.length = 0;
+    d2s.length = 0;
+
+    const children = this.ctx.enemies.getChildren();
+    for (let i = 0; i < children.length; i++) {
+      const e = children[i] as EnemySprite;
+      if (!e.active) continue;
+      const dx = e.x - x;
+      const dy = e.y - y;
+      const d2 = dx * dx + dy * dy;
+      // full and not closer than the current worst → skip (the common case)
+      if (out.length === n && d2 >= d2s[n - 1]) continue;
+      // insert, shifting worse entries toward the tail
+      let j = out.length < n ? out.length : n - 1;
+      while (j > 0 && d2s[j - 1] > d2) {
+        out[j] = out[j - 1];
+        d2s[j] = d2s[j - 1];
+        j--;
+      }
+      out[j] = e;
+      d2s[j] = d2;
+    }
+    return out;
   }
 
   /* -------------------------------------------------------------- */
@@ -623,9 +662,10 @@ export class WeaponSystem implements IWeaponSystem {
       const near = this.ctx.getEnemiesInRadius(ox, oy, hitR);
       for (const e of near) {
         if (!e.active) continue;
-        if ((state.rehit.get(e) ?? 0) > 0) continue;
+        const entry = state.rehit.get(e);
+        if (entry && entry.gen === e.spawnGen) continue; // still cooling down
         this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit() });
-        state.rehit.set(e, rehitMs);
+        state.rehit.set(e, { left: rehitMs, gen: e.spawnGen });
       }
     }
   }
@@ -636,11 +676,14 @@ export class WeaponSystem implements IWeaponSystem {
 
   private decayRehit(state: WeaponState, delta: number): void {
     if (state.rehit.size === 0) return;
-    state.rehit.forEach((ms, enemy) => {
-      const left = ms - delta;
-      // drop expired entries and dead enemies to keep the map small
-      if (left <= 0 || !enemy.active) state.rehit.delete(enemy);
-      else state.rehit.set(enemy, left);
+    state.rehit.forEach((entry, enemy) => {
+      entry.left -= delta;
+      // Drop expired entries, dead enemies, and entries whose pooled instance
+      // has been recycled as a different enemy (spawnGen mismatch) — otherwise
+      // the newcomer would inherit the previous occupant's cooldown.
+      if (entry.left <= 0 || !enemy.active || enemy.spawnGen !== entry.gen) {
+        state.rehit.delete(enemy);
+      }
     });
   }
 

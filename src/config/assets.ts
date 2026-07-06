@@ -54,6 +54,9 @@ export const TEXTURES = {
   ICON_SHIELD: 'gen-ic-shield',
   ICON_FIST: 'gen-ic-fist', // might / damage
   ICON_HOURGLASS: 'gen-ic-hourglass', // cooldown
+  ICON_ECHO: 'gen-ic-echo', // projectile amount
+  ICON_CLOAK: 'gen-ic-cloak', // dodge
+  ICON_LEAF: 'gen-ic-leaf', // hp regen
 } as const;
 
 /** Named frame indices into the tiny-dungeon spritesheet. */

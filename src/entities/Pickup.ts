@@ -313,7 +313,7 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
     this.ctx.popText(this.ctx.player.x, this.ctx.player.y - 24, 'VACUUM!', COLORS.GOLD_LIGHT);
   }
 
-  /** Tiny collect burst — a quick particle pop at the pickup's last position. */
+  /** Tiny collect burst via the shared pooled emitter (tinted per type). */
   private collectFx(): void {
     const tint =
       this.pickupType === 'xp'
@@ -324,20 +324,7 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
             ? COLORS.HP_BAR
             : 0xffffff;
 
-    const burst = this.scene.add.particles(this.x, this.y, TEXTURES.PARTICLE, {
-      lifespan: 300,
-      speed: { min: 30, max: 90 },
-      scale: { start: 0.45, end: 0 },
-      alpha: { start: 0.9, end: 0 },
-      quantity: this.pickupType === 'chest' ? 14 : 6,
-      tint,
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    });
-    burst.setDepth(DEPTH.FX);
-    burst.explode();
-    // Self-destruct the one-shot emitter shortly after.
-    this.scene.time.delayedCall(360, () => burst.destroy());
+    this.ctx.collectBurstAt(this.x, this.y, tint, this.pickupType === 'chest' ? 14 : 6);
   }
 
   /** Resolve the colour of the gem tier this pickup is showing. */

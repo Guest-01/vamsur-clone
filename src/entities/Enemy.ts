@@ -34,6 +34,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
   public def!: EnemyDef;
   public hp = 0;
   public maxHp = 0;
+  public spawnGen = 0;
 
   /**
    * Effective contact damage (def value scaled by elapsed-time difficulty).
@@ -80,6 +81,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
   spawn(ctx: GameContext, def: EnemyDef, x: number, y: number): void {
     this.ctx = ctx;
     this.def = def;
+    this.spawnGen++;
 
     // re-enable the physics body and reset transform.
     this.enableBody(true, x, y, true, true);
@@ -275,7 +277,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
   /* FX helpers                                                              */
   /* ----------------------------------------------------------------------- */
 
-  /** A small burst of sparks at the impact point. */
+  /** A small burst of sparks at the impact point (shared pooled emitter). */
   private emitHitSpark(from?: { x: number; y: number }): void {
     // bias the spark toward the side the hit came from.
     let px = this.x;
@@ -287,28 +289,24 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
       px = this.x - (ax / l) * (this.displayWidth * 0.3);
       py = this.y - (ay / l) * (this.displayHeight * 0.3);
     }
-    const emitter = this.scene.add.particles(px, py, TEXTURES.SPARK, {
-      lifespan: 220,
-      speed: { min: 50, max: 150 },
-      scale: { start: 0.7, end: 0 },
-      alpha: { start: 1, end: 0 },
-      quantity: 4,
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    });
-    emitter.setDepth(DEPTH.FX);
-    emitter.explode(4);
-    // self-destruct once the last particle has died.
-    this.scene.time.delayedCall(260, () => emitter.destroy());
+    this.ctx.hitSparkAt(px, py);
   }
 
-  /** Death poof: a puff of dark dust + a few blood-tinted bits. */
+  /**
+   * Death poof: a puff of dark dust + a few blood-tinted bits. Regular deaths
+   * route through the shared pooled emitter; the (rare, ≤2 per run) boss death
+   * keeps its own bigger one-shot emitter for a distinct look.
+   */
   private emitDeathPoof(x: number, y: number, big: boolean): void {
-    const n = big ? 26 : 8;
+    if (!big) {
+      this.ctx.deathPoofAt(x, y);
+      return;
+    }
+    const n = 26;
     const emitter = this.scene.add.particles(x, y, TEXTURES.PARTICLE, {
-      lifespan: big ? 600 : 360,
-      speed: { min: 30, max: big ? 220 : 120 },
-      scale: { start: big ? 1.2 : 0.7, end: 0 },
+      lifespan: 600,
+      speed: { min: 30, max: 220 },
+      scale: { start: 1.2, end: 0 },
       alpha: { start: 0.9, end: 0 },
       tint: [COLORS.BLOOD, COLORS.BLOOD_LIGHT, 0x2a1a22],
       quantity: n,
@@ -317,7 +315,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     });
     emitter.setDepth(DEPTH.FX);
     emitter.explode(n);
-    this.scene.time.delayedCall(big ? 700 : 420, () => emitter.destroy());
+    this.scene.time.delayedCall(700, () => emitter.destroy());
   }
 
   /** Bright expanding ring + flash for boss death. */

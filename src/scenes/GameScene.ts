@@ -29,8 +29,10 @@ import { createBaseStats, recomputeStats } from '../systems/stats';
 import { getCharacter } from '../content/characters';
 import { MetaState } from '../state/MetaState';
 
-// The integrator is the ONLY module allowed to import concrete entity/system
-// classes — every OTHER module talks through the shared GameContext.
+// The integrator imports the concrete entity/system classes and wires them
+// together. (Pool-owning systems also import their own pooled entity class —
+// EnemySpawner → Enemy, WeaponSystem → Projectile; everything else talks
+// through the shared GameContext.)
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Pickup } from '../entities/Pickup';
@@ -83,6 +85,11 @@ export class GameScene extends Phaser.Scene {
   // --- pop-text pool ------------------------------------------------------
   private popPool: Phaser.GameObjects.Text[] = [];
 
+  // --- shared one-shot FX emitters (persistent, explode() per event) ------
+  private sparkFx!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private poofFx!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private burstFx!: Phaser.GameObjects.Particles.ParticleEmitter;
+
   // --- HUD timer throttle -------------------------------------------------
   private lastTimerEmit = 0;
 
@@ -121,6 +128,42 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ maxSize: SPAWN.POOL_SIZE });
     this.projectiles = this.physics.add.group({ maxSize: 600 });
     this.pickups = this.physics.add.group({ maxSize: 600 });
+
+    // 3.5) Shared one-shot FX emitters. Hit sparks / death poofs / collect
+    //      bursts fire dozens of times per second in a horde, so each effect
+    //      keeps ONE persistent emitter and explode()s at a position instead
+    //      of allocating + destroying a GameObject per event.
+    this.sparkFx = this.add
+      .particles(0, 0, TEXTURES.SPARK, {
+        lifespan: 220,
+        speed: { min: 50, max: 150 },
+        scale: { start: 0.7, end: 0 },
+        alpha: { start: 1, end: 0 },
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      })
+      .setDepth(DEPTH.FX);
+    this.poofFx = this.add
+      .particles(0, 0, TEXTURES.PARTICLE, {
+        lifespan: 360,
+        speed: { min: 30, max: 120 },
+        scale: { start: 0.7, end: 0 },
+        alpha: { start: 0.9, end: 0 },
+        tint: [COLORS.BLOOD, COLORS.BLOOD_LIGHT, 0x2a1a22],
+        blendMode: Phaser.BlendModes.NORMAL,
+        emitting: false,
+      })
+      .setDepth(DEPTH.FX);
+    this.burstFx = this.add
+      .particles(0, 0, TEXTURES.PARTICLE, {
+        lifespan: 300,
+        speed: { min: 30, max: 90 },
+        scale: { start: 0.45, end: 0 },
+        alpha: { start: 0.9, end: 0 },
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      })
+      .setDepth(DEPTH.FX);
 
     // 4) Base stats from the chosen character -----------------------------
     this.stats = createBaseStats(this.character);
@@ -175,6 +218,12 @@ export class GameScene extends Phaser.Scene {
       queueLevelUp: () => this.queueLevelUp(),
       shakeCamera: (i, d) => this.shakeCamera(i, d),
       popText: (x, y, text, color) => this.popText(x, y, text, color),
+      hitSparkAt: (x, y) => this.sparkFx.explode(4, x, y),
+      deathPoofAt: (x, y) => this.poofFx.explode(8, x, y),
+      collectBurstAt: (x, y, tint, quantity) => {
+        this.burstFx.setParticleTint(tint);
+        this.burstFx.explode(quantity ?? 6, x, y);
+      },
     };
 
     // 8) Hand the context to the player (binds player.stats === ctx.stats).

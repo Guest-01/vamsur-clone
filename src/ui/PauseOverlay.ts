@@ -259,15 +259,25 @@ export class PauseOverlay {
       const icon = this.makeIcon(v.icon, 0, -4, 52);
       cell.add(icon);
 
-      // level text bottom-right.
+      // level text bottom-right, on a small backing chip so it stays legible
+      // over any icon colour.
+      const lvlLabel = maxed ? 'MAX' : `${v.level}`;
       const lvl = this.scene.add
-        .text(slot / 2 - 6, slot / 2 - 6, maxed ? 'MAX' : `${v.level}`, {
+        .text(0, 0, lvlLabel, {
           fontFamily: '"Press Start 2P"',
-          fontSize: maxed ? '10px' : '14px',
+          fontSize: maxed ? '15px' : '18px',
           color: maxed ? '#f0d896' : '#e8e0d0',
         })
         .setOrigin(1, 1)
         .setScrollFactor(0);
+      const chipX = slot / 2 - 1;
+      const chipY = slot / 2 - 1;
+      const chip = this.scene.add
+        .rectangle(chipX, chipY, lvl.width + 8, lvl.height + 4, 0x0a0a12, 0.82)
+        .setOrigin(1, 1)
+        .setScrollFactor(0);
+      lvl.setPosition(chipX - 4, chipY - 2);
+      cell.add(chip);
       cell.add(lvl);
 
       parent.add(cell);

@@ -37,8 +37,10 @@ export class EnemySpawner implements IEnemySpawner {
     if (idx !== this.activeWaveIndex) {
       this.activeWaveIndex = idx;
       const wave = WAVES[idx];
-      // reset cadence so a new wave fires its first burst promptly.
-      this.spawnAccum = 0;
+      // Pre-fill the cadence accumulator so the new wave (and the very first
+      // wave at run start) fires its first burst immediately instead of
+      // waiting a full spawn interval.
+      this.spawnAccum = wave ? wave.spawnIntervalSec * 1000 : 0;
       // one-shot boss/elite on wave activation.
       if (wave && wave.bossId) this.spawnBoss(wave.bossId);
     }

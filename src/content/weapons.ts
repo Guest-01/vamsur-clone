@@ -303,6 +303,3 @@ export const WEAPONS: Record<string, WeaponDef> = {
     ],
   },
 };
-
-/** Starting-weapon ids referenced by characters. */
-export const STARTING_WEAPONS = ['whip', 'wand', 'knife'] as const;

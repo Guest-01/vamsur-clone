@@ -326,6 +326,12 @@ export interface EnemyLike {
   def: EnemyDef;
   hp: number;
   maxHp: number;
+  /**
+   * Increments every time this pooled instance is (re)spawned. Systems that
+   * key per-enemy state on the sprite reference (e.g. orbit re-hit cooldowns)
+   * must compare this to detect the instance being recycled as a new enemy.
+   */
+  spawnGen: number;
   /** apply damage; `from` is the hit source position for knockback direction */
   takeDamage(amount: number, from?: { x: number; y: number }, knockback?: number): void;
 }
@@ -421,4 +427,12 @@ export interface GameContext {
   shakeCamera(intensity?: number, durationMs?: number): void;
   /** spawn floating combat text (damage numbers, etc.) */
   popText(x: number, y: number, text: string, color?: number): void;
+
+  // --- pooled one-shot FX (shared persistent emitters owned by GameScene) ---
+  /** small spark burst at a hit point */
+  hitSparkAt(x: number, y: number): void;
+  /** dust/blood poof where a regular enemy died (bosses add their own beat) */
+  deathPoofAt(x: number, y: number): void;
+  /** tinted collect pop where a pickup was grabbed */
+  collectBurstAt(x: number, y: number, tint: number, quantity?: number): void;
 }
