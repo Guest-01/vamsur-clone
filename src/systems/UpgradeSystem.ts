@@ -188,7 +188,15 @@ export class UpgradeSystem implements IUpgradeSystem {
     // Description: the next level's flavour text when levelling, base
     // description when it's a brand new pick. levelText is indexed by level-1.
     const levelText = def.levelText[c.level - 1];
-    const description = isNew ? def.description : levelText ?? def.description;
+    let description = isNew ? def.description : levelText ?? def.description;
+
+    // "개수" (amount) items do nothing for a pure aura/spin loadout — those
+    // behaviors hit every enemy in radius already and never read `amount`
+    // (see WeaponSystem.updateAura / fireSpin). Flag it so a player doesn't
+    // burn a pick on a fully dead stat.
+    if (c.id === 'duplicator' && this.amountIsDeadWeight()) {
+      description += ' (현재 장착 무기엔 효과 없음)';
+    }
 
     return {
       id: c.id,
@@ -202,6 +210,13 @@ export class UpgradeSystem implements IUpgradeSystem {
       rarityColor: this.rarityFor(c, def),
       tag: isNew ? 'NEW' : `Lv ${c.level}`,
     };
+  }
+
+  /** True when every currently owned weapon ignores the `amount` stat entirely. */
+  private amountIsDeadWeight(): boolean {
+    const owned = this.ctx.weaponSystem.getOwned();
+    if (owned.length === 0) return false;
+    return owned.every((w) => w.def.behavior === 'aura' || w.def.behavior === 'spin');
   }
 
   /**

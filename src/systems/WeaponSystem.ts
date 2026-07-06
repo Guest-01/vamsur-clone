@@ -233,24 +233,33 @@ export class WeaponSystem implements IWeaponSystem {
       this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit(), sourceId: w.id });
     }
 
-    // whirling crescent
-    const sStart = (reach / 30) * 0.8;
-    const slash = this.scene.add
-      .image(p.x, p.y, TEXTURES.SLASH)
-      .setDepth(DEPTH.FX)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(tint)
-      .setAlpha(0.95)
-      .setScale(sStart);
+    // Whirling blades: 3 crescents held out at orbit radius and spun together
+    // as one group, so they sweep AROUND the player like a cyclone — a single
+    // crescent spinning in place (the old version) just twirls on its own
+    // axis and reads as a boomerang, not a circular slash.
+    const bladeCount = 3;
+    const orbitR = reach * 0.5;
+    const bladeScale = (reach / 42) * 0.85;
+    const cyclone = this.scene.add.container(p.x, p.y).setDepth(DEPTH.FX).setAlpha(0.95);
+    for (let i = 0; i < bladeCount; i++) {
+      const a = (Math.PI * 2 * i) / bladeCount;
+      const blade = this.scene.add
+        .image(Math.cos(a) * orbitR, Math.sin(a) * orbitR, TEXTURES.SLASH)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(tint)
+        .setScale(bladeScale)
+        .setRotation(a + Math.PI / 2); // tangential facing, like a sweeping sickle
+      cyclone.add(blade);
+    }
     this.scene.tweens.add({
-      targets: slash,
+      targets: cyclone,
       rotation: Math.PI * 2,
-      scaleX: sStart * 1.25,
-      scaleY: sStart * 1.25,
+      scaleX: 1.2,
+      scaleY: 1.2,
       alpha: 0,
       duration: 280,
       ease: 'Quad.easeOut',
-      onComplete: () => slash.destroy(),
+      onComplete: () => cyclone.destroy(),
     });
 
     // expanding shock ring marking the cleave footprint
@@ -289,7 +298,7 @@ export class WeaponSystem implements IWeaponSystem {
     return w.def.area[w.level - 1] * this.ctx.stats.area;
   }
   private life(w: WeaponState): number {
-    return w.def.durationMs[w.level - 1] * this.ctx.stats.duration;
+    return w.def.durationMs[w.level - 1];
   }
   private knock(w: WeaponState): number {
     return w.def.knockback[w.level - 1];
@@ -325,21 +334,30 @@ export class WeaponSystem implements IWeaponSystem {
     const n = this.count(w);
     const spd = this.speed(w);
     const baseAngle = Math.atan2(p.facing.y, p.facing.x);
-    // Fan the knives out slightly when firing more than one.
-    const spread = n > 1 ? 0.22 : 0; // ~12.6° total per extra knife band
+    // Fan the shots out when firing more than one — unless the weapon opts
+    // into a spread of 0 (spear), in which case they stay dead-ahead and
+    // instead line up side-by-side (see `perp`/`lineGap` below) so a multi-
+    // shot volley reads as one focused thrust rather than a spray.
+    const spread = w.def.volleySpreadRad ?? (n > 1 ? 0.22 : 0);
     const start = baseAngle - (spread * (n - 1)) / 2;
+    const tightVolley = spread === 0 && n > 1;
+    const perpX = -Math.sin(baseAngle);
+    const perpY = Math.cos(baseAngle);
+    const lineGap = 16;
+    const lineStart = -(lineGap * (n - 1)) / 2;
 
     for (let k = 0; k < n; k++) {
-      const ang = n > 1 ? start + spread * k : baseAngle;
+      const ang = tightVolley ? baseAngle : start + spread * k;
       const vx = Math.cos(ang) * spd;
       const vy = Math.sin(ang) * spd;
+      const off = tightVolley ? lineStart + lineGap * k : 0;
       const proj = this.getProjectile();
       proj.fire(this.ctx, {
-        x: p.x,
-        y: p.y,
+        x: p.x + perpX * off,
+        y: p.y + perpY * off,
         vx,
         vy,
-        textureKey: TEXTURES.KNIFE,
+        textureKey: w.def.projectileTexture ?? TEXTURES.KNIFE,
         damage: this.dmg(w),
         pierce: this.pierceOf(w),
         life: this.life(w),
@@ -593,6 +611,7 @@ export class WeaponSystem implements IWeaponSystem {
     const enemies = this.ctx.getEnemiesInRadius(p.x, p.y, r);
     const dmg = state.def.damage[i] * this.ctx.stats.might;
     const knock = this.knock(state);
+    const slowMult = state.def.auraSlowMult;
     for (const e of enemies) {
       if (!e.active) continue;
       this.ctx.damageEnemy(e, dmg, {
@@ -600,6 +619,10 @@ export class WeaponSystem implements IWeaponSystem {
         crit: this.rollCrit(),
         sourceId: state.id,
       });
+      // Re-applied every tick, so standing in the cloud keeps the slow live;
+      // the duration outlasts the tick interval so it doesn't flicker between
+      // ticks (e.g. miasma — sanctuary has no auraSlowMult and repels instead).
+      if (slowMult !== undefined) e.applySlow(slowMult, tickMs + 100);
     }
   }
 

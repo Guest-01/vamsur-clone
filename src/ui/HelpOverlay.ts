@@ -70,7 +70,6 @@ const GLOSSARY: Section[] = [
       '쿨다운 (Cooldown) — 공격 간격 ↓',
       '개수 (Amount) — 투사체·효과 수',
       '투사체속도 (Speed) — 날아가는 속도',
-      '지속 (Duration) — 효과 지속시간',
       '자력 (Magnet) — 보석 흡수 범위',
       '방어 (Armor) — 받는 피해 감소',
       '재생 (Recovery) — 초당 체력 회복',

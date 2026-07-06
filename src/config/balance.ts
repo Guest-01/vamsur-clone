@@ -77,7 +77,6 @@ export const DEFAULT_STATS: PlayerStats = {
   cooldownMult: 1,
   projectileSpeed: 1,
   amount: 0,
-  duration: 1,
   magnet: 80,
   armor: 0,
   xpGain: 1,
@@ -167,7 +166,7 @@ export function hpScale(elapsedMs: number): number {
 /** Enemy contact-damage multiplier as a function of elapsed minutes. */
 export function damageScale(elapsedMs: number): number {
   const min = elapsedMs / 60000;
-  return 1 + min * 0.12;
+  return 1 + min * 0.16;
 }
 
 /** Enemy move-speed multiplier as a function of elapsed minutes. */

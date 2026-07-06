@@ -39,6 +39,7 @@ export const TEXTURES = {
   SLASH: 'gen-slash', // whip / melee slash arc
   SHADOW: 'gen-shadow', // soft ellipse drop-shadow under entities
   KNIFE: 'gen-knife', // thrown knife projectile (crisp)
+  SPEAR: 'gen-spear', // thrown spear/lance projectile (crisp, longer than the knife)
 
   // --- generated: background + overlays ---
   BG_TILE: 'gen-bgtile', // 64x64 tileable dark dungeon floor

@@ -295,12 +295,14 @@ export const WAVES: WaveEntry[] = [
     bossId: 'demonKing',
   },
   {
+    // The final boss now arrives here (was 450s) so it gets a real ~70s
+    // engagement window before RUN.SURVIVE_MS ends the run, instead of ~30s.
     timeSec: 410,
     enemies: ['demon', 'brute', 'revenant', 'giantSpider'],
     cap: 200,
     spawnIntervalSec: 0.62,
     burst: 11,
-    bossId: 'mimic',
+    bossId: 'reaper',
   },
   {
     timeSec: 450,
@@ -308,6 +310,5 @@ export const WAVES: WaveEntry[] = [
     cap: 220,
     spawnIntervalSec: 0.58,
     burst: 13,
-    bossId: 'reaper',
   },
 ];

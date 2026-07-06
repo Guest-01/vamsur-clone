@@ -83,7 +83,6 @@ export interface PlayerStats {
   cooldownMult: number; // weapon cooldown multiplier, lower = faster (clamp >= 0.4)
   projectileSpeed: number; // projectile speed multiplier
   amount: number; // bonus projectile / instance count (integer, added)
-  duration: number; // effect duration multiplier
   magnet: number; // pickup attraction radius in px
   armor: number; // flat damage reduction per hit
   xpGain: number; // experience multiplier
@@ -133,6 +132,27 @@ export interface WeaponDef {
   maxLevel: number;
   /** optional tint applied to this weapon's projectiles / slash / aura / orbs (0xRRGGBB) */
   projectileTint?: number;
+  /**
+   * Override the projectile sprite for 'projectile-facing' / 'projectile-nearest'
+   * weapons (defaults to TEXTURES.KNIFE / TEXTURES.BOLT respectively). Use this
+   * when a shared behavior's default sprite doesn't fit the weapon's fiction
+   * (e.g. spear vs. knife).
+   */
+  projectileTexture?: string;
+  /**
+   * Override the angular fan spread (radians) used by 'projectile-facing'
+   * weapons when a volley fires more than one shot. Omit to use the default
+   * fan (~0.22 rad). Set to 0 for a tight parallel volley (perpendicular
+   * position offset instead of an angle fan) — reads as a focused line
+   * thrust rather than a spray.
+   */
+  volleySpreadRad?: number;
+  /**
+   * 'aura' only: enemies inside the radius move at this fraction of their
+   * normal speed while the tick keeps re-applying it (e.g. miasma's cloud).
+   * Omit for no slow (e.g. sanctuary, which repels via knockback instead).
+   */
+  auraSlowMult?: number;
   /** rarity weight for showing up in level-up rolls (higher = more common) */
   weight: number;
   /** per-level base damage (before player.might) */
@@ -379,6 +399,8 @@ export interface EnemyLike {
   spawnGen: number;
   /** apply damage; `from` is the hit source position for knockback direction */
   takeDamage(amount: number, from?: { x: number; y: number }, knockback?: number): void;
+  /** apply a temporary move-speed multiplier (e.g. miasma's slowing cloud) */
+  applySlow(mult: number, durationMs: number): void;
 }
 export type EnemySprite = Phaser.Physics.Arcade.Sprite & EnemyLike;
 

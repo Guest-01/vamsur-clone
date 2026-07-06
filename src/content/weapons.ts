@@ -29,7 +29,10 @@ export const WEAPONS: Record<string, WeaponDef> = {
     weight: 10,
     damage: [10, 12, 14, 18, 22, 26, 31, 37],
     cooldownMs: [1150, 1100, 1050, 1000, 950, 900, 870, 840],
-    amount: [1, 1, 2, 2, 2, 2, 3, 3],
+    // capped at 2 — the weapon only ever slashes the facing side plus the
+    // opposite side (see fireWhip in WeaponSystem); a 3rd value here would be
+    // dead data since nothing reads amount beyond the ">= 2" check.
+    amount: [1, 1, 2, 2, 2, 2, 2, 2],
     area: [1, 1.1, 1.1, 1.25, 1.4, 1.55, 1.7, 1.9],
     speed: [0, 0, 0, 0, 0, 0, 0, 0],
     pierce: [99, 99, 99, 99, 99, 99, 99, 99],
@@ -42,7 +45,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
       '피해 +4, 범위 ↑',
       '피해 +4, 범위 ↑',
       '쿨다운 ↓',
-      '추가 일격, 범위 ↑',
+      '피해 +5, 범위 ↑',
       '피해 대폭 ↑',
     ],
   },
@@ -134,7 +137,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   sanctuary: {
     id: 'sanctuary',
     name: '성역',
-    description: '주위를 감싸는 신성한 장막. 닿는 적에게 지속 피해.',
+    description: '주위를 감싸는 신성한 장막. 닿는 적에게 지속 피해를 주고 밀쳐낸다.',
     behavior: 'aura',
     icon: sheet(FRAMES.POTION_BLUE),
     maxLevel: 8,
@@ -142,20 +145,25 @@ export const WEAPONS: Record<string, WeaponDef> = {
     damage: [5, 6, 7, 9, 11, 13, 15, 18],
     cooldownMs: [620, 600, 580, 560, 540, 520, 500, 460],
     amount: [1, 1, 1, 1, 1, 1, 1, 1],
-    area: [1, 1.15, 1.3, 1.45, 1.6, 1.8, 2.0, 2.3],
+    // radius growth trimmed (was 1 -> 2.3, +130%) so a maxed aura doesn't
+    // out-scale every other weapon's effective range.
+    area: [1, 1.12, 1.23, 1.35, 1.46, 1.62, 1.77, 2.0],
     speed: [0, 0, 0, 0, 0, 0, 0, 0],
     pierce: [99, 99, 99, 99, 99, 99, 99, 99],
     durationMs: [0, 0, 0, 0, 0, 0, 0, 0],
-    knockback: [0, 0, 0, 10, 10, 15, 15, 25],
+    // knockback present from level 1 (was 0 until lvl4) — sanctuary is the
+    // "safe zone" aura: it keeps enemies pushed out, miasma (below) never
+    // does and slows instead. See auraSlowMult on miasma for the contrast.
+    knockback: [15, 15, 20, 25, 30, 35, 40, 50],
     levelText: [
-      '주위 적에게 지속 피해',
+      '주위 적에게 지속 피해, 밀쳐냄',
       '피해 +1',
-      '피해 +1',
-      '범위 ↑, 밀쳐냄',
+      '피해 +1, 밀쳐냄 ↑',
+      '범위 ↑, 밀쳐냄 ↑',
       '피해 +2, 범위 ↑',
-      '피해 +2, 범위 ↑',
+      '피해 +2, 범위 ↑, 밀쳐냄 ↑',
       '범위 ↑',
-      '피해 대폭 ↑',
+      '피해 대폭 ↑, 밀쳐냄 ↑',
     ],
   },
 
@@ -196,10 +204,14 @@ export const WEAPONS: Record<string, WeaponDef> = {
     projectileTint: 0xff7a6a,
     maxLevel: 8,
     weight: 8,
-    damage: [22, 27, 33, 40, 48, 57, 68, 82],
-    cooldownMs: [1450, 1410, 1370, 1330, 1290, 1250, 1210, 1150],
+    // Levels 1-3 untouched; the top-end growth (4-8) is trimmed on all three
+    // axes (damage/cooldown/area) so a maxed greatsword no longer has both
+    // the largest radius AND the highest per-target DPS of the three
+    // unlimited-target AoE weapons (sanctuary/miasma/greatsword) at once.
+    damage: [22, 27, 33, 40, 47, 54, 62, 70],
+    cooldownMs: [1450, 1420, 1400, 1380, 1360, 1340, 1320, 1300],
     amount: [1, 1, 1, 1, 1, 1, 1, 1],
-    area: [1.3, 1.45, 1.6, 1.8, 2.0, 2.25, 2.5, 2.8],
+    area: [1.3, 1.4, 1.5, 1.63, 1.77, 1.93, 2.1, 2.3],
     speed: [0, 0, 0, 0, 0, 0, 0, 0],
     pierce: [99, 99, 99, 99, 99, 99, 99, 99],
     durationMs: [280, 280, 280, 280, 280, 280, 280, 280],
@@ -219,10 +231,14 @@ export const WEAPONS: Record<string, WeaponDef> = {
   spear: {
     id: 'spear',
     name: '장창',
-    description: '정면으로 길게 꿰뚫는 창. 높은 관통.',
+    description: '정면 일직선을 꿰뚫는 창. 여러 자루도 흩어지지 않고 나란히 찌른다.',
     behavior: 'projectile-facing',
     icon: sheet(FRAMES.SWORD_GOLD),
     projectileTint: 0xffe79a,
+    projectileTexture: TEXTURES.SPEAR,
+    // straight parallel volley instead of the knife's fan spread — see
+    // volleySpreadRad doc in types.ts.
+    volleySpreadRad: 0,
     maxLevel: 8,
     weight: 8,
     damage: [14, 17, 21, 25, 30, 36, 43, 52],
@@ -277,22 +293,29 @@ export const WEAPONS: Record<string, WeaponDef> = {
   miasma: {
     id: 'miasma',
     name: '독무',
-    description: '넓게 퍼지는 독성 장막. 닿는 적에게 지속 피해.',
+    description: '넓게 퍼지는 독성 장막. 닿는 적에게 지속 피해를 주고 이동속도를 늦춘다.',
     behavior: 'aura',
     icon: sheet(FRAMES.POTION_GREEN),
     projectileTint: 0x8bff5a,
+    // enemies inside move at 55% speed while the tick keeps re-applying it —
+    // miasma is the "bog down" aura (no knockback), sanctuary above is the
+    // "push out" aura (knockback, no slow). Flat regardless of level; radius
+    // and damage still scale normally via area[]/damage[].
+    auraSlowMult: 0.55,
     maxLevel: 8,
     weight: 6,
     damage: [4, 5, 6, 7, 9, 11, 13, 16],
     cooldownMs: [700, 680, 660, 640, 620, 600, 580, 540],
     amount: [1, 1, 1, 1, 1, 1, 1, 1],
-    area: [1.3, 1.5, 1.7, 1.9, 2.1, 2.4, 2.7, 3.1],
+    // radius growth trimmed (was 1.3 -> 3.1, +138%) — same rationale as
+    // sanctuary above.
+    area: [1.3, 1.44, 1.59, 1.73, 1.88, 2.09, 2.31, 2.6],
     speed: [0, 0, 0, 0, 0, 0, 0, 0],
     pierce: [99, 99, 99, 99, 99, 99, 99, 99],
     durationMs: [0, 0, 0, 0, 0, 0, 0, 0],
     knockback: [0, 0, 0, 0, 0, 0, 0, 0],
     levelText: [
-      '넓은 독 장막',
+      '넓은 독 장막, 적 둔화',
       '피해 +1, 범위 ↑',
       '피해 +1, 범위 ↑',
       '범위 ↑',

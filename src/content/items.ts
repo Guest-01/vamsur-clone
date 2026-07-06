@@ -202,18 +202,6 @@ export const ITEMS: Record<string, ItemDef> = {
     },
     levelText: ['+15% 골드', '+30% 골드', '+45% 골드', '+60% 골드'],
   },
-  eternalCandle: {
-    id: 'eternalCandle',
-    name: '영원한 촛불',
-    description: '무기 효과의 지속시간이 늘어난다.',
-    icon: sheet(FRAMES.BOTTLE),
-    maxLevel: 5,
-    weight: 4,
-    apply: (s, lvl) => {
-      s.duration += 0.1 * lvl;
-    },
-    levelText: ['+10% 지속', '+20% 지속', '+30% 지속', '+40% 지속', '+50% 지속'],
-  },
   crown: {
     id: 'crown',
     name: '지혜의 후광',

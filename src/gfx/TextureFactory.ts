@@ -29,6 +29,7 @@ export class TextureFactory {
     this.slash(scene);
     this.shadow(scene);
     this.knife(scene);
+    this.spear(scene);
     this.bgTile(scene);
     this.vignette(scene);
     this.icons(scene);
@@ -244,6 +245,30 @@ export class TextureFactory {
     );
     g.fillStyle(0xffffff, 0.8).fillRect(5, 3, 8, 1); // edge highlight
     g.generateTexture(TEXTURES.KNIFE, 16, 8);
+    g.destroy();
+  }
+
+  private static spear(scene: Phaser.Scene): void {
+    const w = 32;
+    const h = 8;
+    const g = this.gfx(scene);
+    // long haft, tip points to the right (+x) — twice the knife's length so
+    // the silhouette reads as a spear/lance rather than a scaled-up dagger.
+    g.fillStyle(0x6b5a3a, 1).fillRect(0, 3, 21, 2);
+    g.fillStyle(0x3a2c18, 1).fillRect(3, 2, 3, 4); // grip wrap band
+    // elongated diamond spearhead
+    g.fillStyle(0xd8dee6, 1);
+    g.fillPoints(
+      [
+        new Phaser.Math.Vector2(19, 4),
+        new Phaser.Math.Vector2(25, 1),
+        new Phaser.Math.Vector2(w, 4),
+        new Phaser.Math.Vector2(25, 7),
+      ],
+      true
+    );
+    g.fillStyle(0xffffff, 0.75).fillRect(20, 3, 9, 1); // centre ridge highlight
+    g.generateTexture(TEXTURES.SPEAR, w, h);
     g.destroy();
   }
 

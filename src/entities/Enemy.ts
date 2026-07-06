@@ -52,6 +52,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
   private flashLeft = 0;
   /** ms remaining of a knockback impulse, during which we don't steer. */
   private knockbackLeft = 0;
+  /** ms remaining of an applied slow (e.g. miasma); see applySlow(). */
+  private slowLeft = 0;
+  /** current velocity multiplier from an applied slow (1 = no slow). */
+  private slowMult = 1;
   /** per-enemy wobble phase so wander-chasers don't all sync up. */
   private wobblePhase = 0;
   /** running clock used for sine wobble + bar bob. */
@@ -113,6 +117,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     // reset transient state
     this.flashLeft = 0;
     this.knockbackLeft = 0;
+    this.slowLeft = 0;
+    this.slowMult = 1;
     this.clock = 0;
     this.wobblePhase = ctx.rng.frac() * Math.PI * 2;
     this.setVelocity(0, 0);
@@ -170,6 +176,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
       }
     }
 
+    // decay an applied slow (e.g. miasma) back to full speed once it expires.
+    if (this.slowLeft > 0) {
+      this.slowLeft -= delta;
+      if (this.slowLeft <= 0) this.slowMult = 1;
+    }
+
     // Steering: while a knockback impulse is active we let the body coast.
     if (this.knockbackLeft > 0) {
       this.knockbackLeft -= delta;
@@ -192,7 +204,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
         ny /= l2;
       }
 
-      this.setVelocity(nx * this.speed, ny * this.speed);
+      this.setVelocity(nx * this.speed * this.slowMult, ny * this.speed * this.slowMult);
 
       // face the player (sheet sprites face right at frame default).
       this.setFlipX(dx < 0);
@@ -208,6 +220,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
       const bob = Math.sin(this.clock * 0.005) * 1.5;
       this.hpBar.setPosition(this.x, this.y - this.displayHeight * 0.62 + bob);
     }
+  }
+
+  /**
+   * Apply a temporary move-speed multiplier (e.g. miasma's cloud). Refreshing
+   * while still inside the effect keeps the slow continuous; the strongest
+   * (lowest) multiplier currently active wins if two sources overlap.
+   */
+  applySlow(mult: number, durationMs: number): void {
+    this.slowMult = Math.min(this.slowMult, mult);
+    this.slowLeft = Math.max(this.slowLeft, durationMs);
   }
 
   /* ----------------------------------------------------------------------- */

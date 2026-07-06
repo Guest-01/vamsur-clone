@@ -33,7 +33,7 @@ const EVENT_INFO: Record<RunEventId, { name: string; desc: string }> = {
 
 /**
  * Fixed schedule, tuned around the wave table (bosses at 2:10 / 3:50 / 5:50 /
- * 7:30): events land in the lulls between one-shot boss spawns.
+ * 6:50): events land in the lulls between one-shot boss spawns.
  */
 const SCHEDULE: ScheduledEvent[] = [
   { id: 'goldRush', startSec: 70, durationSec: 25 },
