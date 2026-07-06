@@ -230,7 +230,7 @@ export class WeaponSystem implements IWeaponSystem {
     const enemies = this.ctx.getEnemiesInRadius(p.x, p.y, reach);
     for (const e of enemies) {
       if (!e.active) continue;
-      this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit() });
+      this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit(), sourceId: w.id });
     }
 
     // whirling crescent
@@ -348,6 +348,7 @@ export class WeaponSystem implements IWeaponSystem {
         angle: ang,
         tint: w.def.projectileTint,
         crit: this.rollCrit(),
+        sourceId: w.id,
       });
     }
   }
@@ -393,6 +394,7 @@ export class WeaponSystem implements IWeaponSystem {
         additive: true,
         tint: w.def.projectileTint,
         crit: this.rollCrit(),
+        sourceId: w.id,
       });
     }
   }
@@ -478,6 +480,7 @@ export class WeaponSystem implements IWeaponSystem {
         gravity: grav,
         tint: w.def.projectileTint,
         crit: this.rollCrit(),
+        sourceId: w.id,
       });
     }
   }
@@ -536,7 +539,7 @@ export class WeaponSystem implements IWeaponSystem {
     const knock = this.knock(w);
     for (const e of enemies) {
       if (!e.active) continue;
-      this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit() });
+      this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit(), sourceId: w.id });
     }
   }
 
@@ -592,7 +595,11 @@ export class WeaponSystem implements IWeaponSystem {
     const knock = this.knock(state);
     for (const e of enemies) {
       if (!e.active) continue;
-      this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit() });
+      this.ctx.damageEnemy(e, dmg, {
+        knockback: knock,
+        crit: this.rollCrit(),
+        sourceId: state.id,
+      });
     }
   }
 
@@ -664,7 +671,11 @@ export class WeaponSystem implements IWeaponSystem {
         if (!e.active) continue;
         const entry = state.rehit.get(e);
         if (entry && entry.gen === e.spawnGen) continue; // still cooling down
-        this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit() });
+        this.ctx.damageEnemy(e, dmg, {
+          knockback: knock,
+          crit: this.rollCrit(),
+          sourceId: state.id,
+        });
         state.rehit.set(e, { left: rehitMs, gen: e.spawnGen });
       }
     }

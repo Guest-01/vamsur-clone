@@ -27,10 +27,12 @@ export const EVENTS = {
   HP_CHANGED: 'hp-changed',
   /** {xp:number, xpToNext:number, level:number} */
   XP_CHANGED: 'xp-changed',
-  /** {level:number, options:UpgradeOption[]} — game -> UI (gameplay is paused) */
+  /** {level:number, options:UpgradeOption[], rerollsLeft:number} — game -> UI (gameplay is paused) */
   LEVEL_UP: 'level-up',
   /** {option:UpgradeOption} — UI -> game (player picked a card) */
   UPGRADE_CHOSEN: 'upgrade-chosen',
+  /** {} — UI -> game (player spent a reroll charge on the level-up screen) */
+  REROLL_REQUESTED: 'reroll-requested',
   /** {kills:number} */
   KILLS_CHANGED: 'kills-changed',
   /** {gold:number} */
@@ -47,6 +49,10 @@ export const EVENTS = {
   PAUSE_TOGGLED: 'pause-toggled',
   /** {victory:boolean, summary:RunSummary} */
   GAME_OVER: 'game-over',
+  /** {id, name, desc, active:boolean, durationMs} — a timed run event started/ended */
+  RUN_EVENT: 'run-event',
+  /** {active:boolean, angle:number} — direction to the nearest OFF-SCREEN chest */
+  CHEST_DIR: 'chest-dir',
 } as const;
 
 /** Phaser data-registry / scene-data keys. */
@@ -55,6 +61,7 @@ export const REGISTRY = {
   SELECTED_CHARACTER: 'vs_selected_character',
   MUTED: 'vs_muted',
   META: 'vs_meta_v1',
+  CURSE: 'vs_curse',
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -86,6 +93,7 @@ export interface PlayerStats {
   revives: number; // number of auto-revives remaining
   dodge: number; // 0..1 chance to ignore a hit
   greed: number; // gold gain multiplier
+  rerolls: number; // level-up reroll charges granted at the start of each run
 }
 
 /* ------------------------------------------------------------------ */
@@ -174,6 +182,19 @@ export interface PowerUpDef {
   apply(stats: PlayerStats, level: number): void;
 }
 
+/**
+ * One-shot shop consumable: bought with banked gold, held (max 1) until the
+ * next run starts, then consumed. Its effect is hard-wired by id in GameScene
+ * (no stat hook — consumables do run-setup things stats can't express).
+ */
+export interface ConsumableDef {
+  id: string;
+  name: string;
+  description: string;
+  icon: IconRef;
+  cost: number;
+}
+
 export interface CharacterDef {
   id: CharacterId;
   name: string;
@@ -246,6 +267,19 @@ export interface RunState {
   gold: number;
   /** owned passive items -> level */
   ownedItems: Map<ItemId, number>;
+  /** level-up reroll charges remaining this run (seeded from stats.rerolls) */
+  rerollsLeft: number;
+  /** curse contract level chosen for this run (0 = none; see curseMults) */
+  curse: number;
+  /** timed-run-event multipliers/bonuses (managed by systems/RunEvents) */
+  eventGoldMult: number;
+  eventXpMult: number;
+  /** spawn-interval divisor while a surge event is active (1 = normal) */
+  eventSpawnRate: number;
+  /** flat bonus to the wave's concurrent-enemy cap while surging */
+  eventCapBonus: number;
+  /** cumulative damage dealt per weapon id (for the end-of-run stats) */
+  damageByWeapon: Map<WeaponId, number>;
   gameOver: boolean;
   victory: boolean;
 }
@@ -257,8 +291,19 @@ export interface RunSummary {
   kills: number;
   gold: number;
   victory: boolean;
+  /** curse contract level this run was played at (0 = none) */
+  curse: number;
   weapons: OwnedWeaponView[];
   items: OwnedItemView[];
+  /** per-weapon total damage, sorted descending (end-of-run chart) */
+  weaponDamage: WeaponDamageView[];
+}
+
+export interface WeaponDamageView {
+  id: WeaponId;
+  name: string;
+  icon: IconRef;
+  total: number;
 }
 
 export interface OwnedWeaponView {
@@ -413,7 +458,7 @@ export interface GameContext {
   damageEnemy(
     enemy: EnemySprite,
     amount: number,
-    opts?: { knockback?: number; crit?: boolean }
+    opts?: { knockback?: number; crit?: boolean; sourceId?: WeaponId }
   ): void;
   spawnXpGem(x: number, y: number, value: number): void;
   spawnPickup(x: number, y: number, type: PickupType, value?: number): void;

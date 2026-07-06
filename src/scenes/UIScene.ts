@@ -86,6 +86,15 @@ export class UIScene extends Phaser.Scene {
   private hitFlash!: Phaser.GameObjects.Rectangle;
   private vignette!: Phaser.GameObjects.Image;
 
+  // --- timed run events (banner + ambient screen tint) ---
+  private eventBannerName!: Phaser.GameObjects.Text;
+  private eventBannerDesc!: Phaser.GameObjects.Text;
+  private eventTint!: Phaser.GameObjects.Rectangle;
+
+  // --- chest compass (edge arrow toward the nearest off-screen chest) ---
+  private chestCompass!: Phaser.GameObjects.Container;
+  private chestArrow!: Phaser.GameObjects.Graphics;
+
   // --- touch controls (mobile) ---
   private joystick?: VirtualJoystick;
   private pauseButton!: Phaser.GameObjects.Container;
@@ -232,9 +241,12 @@ export class UIScene extends Phaser.Scene {
     // right-anchored kills/gold group
     this.topRight.x = w;
 
-    // full-screen hit-flash + vignette
+    // full-screen hit-flash + vignette + event tint / banner
     this.hitFlash.setPosition(w / 2, h / 2).setSize(w, h);
     this.vignette.setDisplaySize(w, h);
+    this.eventTint.setPosition(w / 2, GAME.HEIGHT / 2).setSize(w, GAME.HEIGHT);
+    this.eventBannerName.setX(w / 2);
+    this.eventBannerDesc.setX(w / 2);
 
     // right-anchored pause button
     this.pauseButton.x = w - PAUSE_BTN_MARGIN - PAUSE_BTN_SIZE / 2;
@@ -255,6 +267,8 @@ export class UIScene extends Phaser.Scene {
     g.on(EVENTS.PLAYER_HIT, this.onPlayerHit, this);
     g.on(EVENTS.LEVEL_UP, this.onLevelUp, this);
     g.on(EVENTS.PAUSE_TOGGLED, this.onPauseToggled, this);
+    g.on(EVENTS.RUN_EVENT, this.onRunEvent, this);
+    g.on(EVENTS.CHEST_DIR, this.onChestDir, this);
   }
 
   private teardown(g: Phaser.Events.EventEmitter): void {
@@ -268,6 +282,8 @@ export class UIScene extends Phaser.Scene {
     g.off(EVENTS.PLAYER_HIT, this.onPlayerHit, this);
     g.off(EVENTS.LEVEL_UP, this.onLevelUp, this);
     g.off(EVENTS.PAUSE_TOGGLED, this.onPauseToggled, this);
+    g.off(EVENTS.RUN_EVENT, this.onRunEvent, this);
+    g.off(EVENTS.CHEST_DIR, this.onChestDir, this);
     this.escKey?.removeAllListeners();
     this.levelUpOverlay?.destroy();
     this.pauseOverlay?.destroy();
@@ -333,10 +349,10 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  private onLevelUp(p: { level: number; options: UpgradeOption[] }): void {
+  private onLevelUp(p: { level: number; options: UpgradeOption[]; rerollsLeft?: number }): void {
     // Hide the pause overlay if somehow open; level-up takes priority.
     if (this.pauseOverlay.isVisible()) this.pauseOverlay.hide();
-    this.levelUpOverlay.show(p.level, p.options);
+    this.levelUpOverlay.show(p.level, p.options, p.rerollsLeft ?? 0);
   }
 
   private onPauseToggled(p: { paused: boolean }): void {
@@ -346,6 +362,78 @@ export class UIScene extends Phaser.Scene {
     } else {
       this.pauseOverlay.hide();
     }
+  }
+
+  /** A timed run event started/ended: banner + ambient tint. */
+  private onRunEvent(p: {
+    id: string;
+    name: string;
+    desc: string;
+    active: boolean;
+    durationMs: number;
+  }): void {
+    // per-event flavour colours
+    const accent =
+      p.id === 'goldRush' ? '#f0d896' : p.id === 'bloodMoon' ? '#e24b58' : '#bfe8ff';
+    const tintColor =
+      p.id === 'goldRush' ? COLORS.GOLD : p.id === 'bloodMoon' ? COLORS.BLOOD : 0x6ab0ff;
+    const tintAlpha = p.id === 'bloodMoon' ? 0.09 : 0.055;
+
+    if (p.active) {
+      // banner: pop in, hold, fade out
+      this.eventBannerName.setText(`✦ ${p.name} ✦`).setColor(accent);
+      this.eventBannerDesc.setText(p.desc);
+      this.tweens.killTweensOf([this.eventBannerName, this.eventBannerDesc]);
+      this.eventBannerName.setAlpha(0).setScale(0.7);
+      this.eventBannerDesc.setAlpha(0);
+      this.tweens.add({
+        targets: this.eventBannerName,
+        alpha: 1,
+        scale: 1,
+        duration: 320,
+        ease: 'Back.Out',
+      });
+      this.tweens.add({ targets: this.eventBannerDesc, alpha: 0.95, duration: 320, delay: 120 });
+      this.tweens.add({
+        targets: [this.eventBannerName, this.eventBannerDesc],
+        alpha: 0,
+        delay: 2800,
+        duration: 500,
+        ease: 'Quad.In',
+      });
+
+      // ambient tint while the event runs (instant events just flash briefly)
+      this.tweens.killTweensOf(this.eventTint);
+      this.eventTint.setFillStyle(tintColor, 1);
+      this.tweens.add({ targets: this.eventTint, alpha: tintAlpha, duration: 400 });
+      if (p.durationMs <= 0) {
+        this.tweens.add({ targets: this.eventTint, alpha: 0, delay: 1600, duration: 900 });
+      }
+    } else {
+      this.tweens.killTweensOf(this.eventTint);
+      this.tweens.add({ targets: this.eventTint, alpha: 0, duration: 600 });
+    }
+  }
+
+  /** Aim/park the chest compass on the screen edge (player ≈ screen centre). */
+  private onChestDir(p: { active: boolean; angle: number }): void {
+    if (!p.active) {
+      this.chestCompass.setVisible(false);
+      return;
+    }
+    const cx = this.scale.width / 2;
+    const cy = GAME.HEIGHT / 2;
+    const cos = Math.cos(p.angle);
+    const sin = Math.sin(p.angle);
+    const maxX = this.scale.width / 2 - 96;
+    const maxY = GAME.HEIGHT / 2 - 120;
+    const r = Math.min(
+      Math.abs(cos) > 1e-4 ? maxX / Math.abs(cos) : Number.POSITIVE_INFINITY,
+      Math.abs(sin) > 1e-4 ? maxY / Math.abs(sin) : Number.POSITIVE_INFINITY
+    );
+    this.chestCompass.setPosition(cx + cos * r, cy + sin * r);
+    this.chestArrow.setRotation(p.angle);
+    this.chestCompass.setVisible(true);
   }
 
   private onEsc(): void {
@@ -378,6 +466,8 @@ export class UIScene extends Phaser.Scene {
     this.buildTopRight();
     this.buildTray();
     this.buildHitFlash();
+    this.buildEventLayer();
+    this.buildChestCompass();
   }
 
   /** Full-width thin XP bar at the very top + a circular "Lv N" badge. */
@@ -419,7 +509,7 @@ export class UIScene extends Phaser.Scene {
 
     const lvLabel = this.add
       .text(badgeX, badgeY - 16, 'LV', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: '#c9a24b',
       })
@@ -430,7 +520,7 @@ export class UIScene extends Phaser.Scene {
 
     this.levelBadgeText = this.add
       .text(badgeX, badgeY + 8, `${this.state.level}`, {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '24px',
         color: '#f0d896',
       })
@@ -443,7 +533,7 @@ export class UIScene extends Phaser.Scene {
   private buildTimer(): void {
     this.timerText = this.add
       .text(this.scale.width / 2, 60, '00:00', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '40px',
         color: '#e8e0d0',
         stroke: '#000000',
@@ -501,7 +591,7 @@ export class UIScene extends Phaser.Scene {
     // "HP" label above the bar.
     this.add
       .text(barX, oy + 4, 'HP', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: '#e24b58',
       })
@@ -511,7 +601,7 @@ export class UIScene extends Phaser.Scene {
     // cur/max text centred over the bar.
     this.hpText = this.add
       .text(barX + this.hpBarMaxWidth / 2, barY + barH / 2, '100 / 100', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: '#ffffff',
         stroke: '#000000',
@@ -564,22 +654,22 @@ export class UIScene extends Phaser.Scene {
 
     this.killsText = this.add
       .text(iconX + 36, topY + 32, '0', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '24px',
         color: '#e8e0d0',
       })
       .setOrigin(0, 0.5);
     this.topRight.add(this.killsText);
 
-    // gold row — coin sprite (sheet frame) + count.
+    // gold row — generated coin icon + count.
     const coin = this.add
-      .image(iconX, topY + 80, TEXTURES.SPRITES, FRAMES.COINS)
-      .setScale(2.8);
+      .image(iconX, topY + 80, TEXTURES.ICON_COIN)
+      .setScale(0.9);
     this.topRight.add(coin);
 
     this.goldText = this.add
       .text(iconX + 36, topY + 80, '0', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '24px',
         color: '#f0d896',
       })
@@ -603,6 +693,80 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH + 5)
       .setAlpha(0);
+  }
+
+  /** Banner texts + ambient tint used by the timed run events. */
+  private buildEventLayer(): void {
+    const w = this.scale.width;
+
+    // ambient full-screen tint while a timed event is active (above the
+    // vignette at depth 3, below every HUD widget).
+    this.eventTint = this.add
+      .rectangle(w / 2, GAME.HEIGHT / 2, w, GAME.HEIGHT, COLORS.BLOOD, 1)
+      .setScrollFactor(0)
+      .setDepth(4)
+      .setAlpha(0);
+
+    this.eventBannerName = this.add
+      .text(w / 2, 236, '', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '58px',
+        color: '#f0d896',
+        stroke: '#1a1208',
+        strokeThickness: 10,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH + 4)
+      .setAlpha(0);
+
+    this.eventBannerDesc = this.add
+      .text(w / 2, 292, '', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '26px',
+        color: '#d8c9a0',
+        stroke: '#000000',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH + 4)
+      .setAlpha(0);
+  }
+
+  /**
+   * Chest compass: a gold chest icon + pointing arrow that sits on the screen
+   * edge in the direction of the nearest off-screen treasure chest.
+   */
+  private buildChestCompass(): void {
+    this.chestCompass = this.add
+      .container(0, 0)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH + 3)
+      .setVisible(false);
+
+    const chest = this.add
+      .image(0, 0, TEXTURES.SPRITES, FRAMES.CHEST)
+      .setScale(2.6);
+    this.chestCompass.add(chest);
+
+    // triangle pointing +x, orbiting the chest icon via its own rotation
+    this.chestArrow = this.add.graphics();
+    this.chestArrow.fillStyle(COLORS.GOLD_LIGHT, 1).fillTriangle(52, 0, 30, -13, 30, 13);
+    this.chestArrow.lineStyle(3, 0x1a1208, 0.9).strokeTriangle(52, 0, 30, -13, 30, 13);
+    this.chestCompass.add(this.chestArrow);
+
+    // attention pulse
+    this.tweens.add({
+      targets: this.chestCompass,
+      alpha: { from: 1, to: 0.55 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.inOut',
+    });
   }
 
   /**
@@ -734,7 +898,7 @@ export class UIScene extends Phaser.Scene {
 
       const lvl = this.add
         .text(slot / 2 - 6, slot / 2 - 6, maxed ? 'M' : `${level}`, {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: '"Press Start 2P", Galmuri11, monospace',
           fontSize: '16px',
           color: maxed ? '#f0d896' : '#e8e0d0',
           stroke: '#000000',

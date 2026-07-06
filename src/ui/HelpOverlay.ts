@@ -20,6 +20,7 @@ const LEFT: Section[] = [
       '이동      —   W A S D  /  방향키',
       '공격      —   자동 (무기마다 방식이 다르다)',
       '강화 선택  —   1  2  3   ·   ← →   ·   Enter',
+      '선택지 새로고침 —   R  (상점의 운명의 거울 필요)',
       '일시정지   —   ESC',
     ],
   },
@@ -54,7 +55,7 @@ const RIGHT: Section[] = [
       '· 계속 움직여 포위를 피하라',
       '· 자력을 올리면 보석 수급이 편하다',
       '· 쿨다운·위력은 어떤 빌드에도 강하다',
-      '· 행운(Clover)은 새 무기·고급 강화 등장률 ↑',
+      '· 행운(검은 고양이)은 새 무기·고급 강화 등장률 ↑',
       '· 무기 하나를 끝까지 키우는 집중 빌드도 강력',
     ],
   },
@@ -141,7 +142,7 @@ export class HelpOverlay {
     // title
     const title = scene.add
       .text(cx, top + 60, '플레이 가이드', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '56px',
         color: '#f0d896',
@@ -183,7 +184,7 @@ export class HelpOverlay {
     this.makeCloseButton(cx, top + ph - 56);
     const hint = scene.add
       .text(cx, top + ph - 22, 'ESC 또는 H 키로 닫기', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '22px',
         color: '#9a8f78',
       })
@@ -236,7 +237,7 @@ export class HelpOverlay {
     for (const sec of sections) {
       const header = this.scene.add
         .text(x, y, sec.header, {
-          fontFamily: 'Cinzel, serif',
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
           fontSize: '30px',
           color: '#c9a24b',
@@ -249,7 +250,7 @@ export class HelpOverlay {
       for (const line of sec.body) {
         const t = this.scene.add
           .text(x + 6, y, line, {
-            fontFamily: 'Cinzel, serif',
+            fontFamily: 'Cinzel, "Noto Serif KR", serif',
             fontSize: '22px',
             color: '#d8c9a0',
             wordWrap: { width: wrapW },
@@ -281,7 +282,7 @@ export class HelpOverlay {
 
     const txt = scene.add
       .text(0, 0, '닫기', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
         color: '#e8e0d0',

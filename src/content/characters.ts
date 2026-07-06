@@ -5,7 +5,7 @@ import { TEXTURES, FRAMES } from '../config/assets';
 export const CHARACTERS: CharacterDef[] = [
   {
     id: 'knight',
-    name: 'Sir Roland',
+    name: '롤랑 경',
     description: '단단한 갑옷의 기사. 높은 체력과 방어로 오래 버틴다.',
     frame: FRAMES.KNIGHT,
     startingWeaponId: 'whip',
@@ -14,7 +14,7 @@ export const CHARACTERS: CharacterDef[] = [
   },
   {
     id: 'mage',
-    name: 'Elvira',
+    name: '엘비라',
     description: '서리의 마법사. 강한 위력과 넓은 범위를 지녔으나 허약하다.',
     frame: FRAMES.MAGE,
     startingWeaponId: 'wand',
@@ -23,7 +23,7 @@ export const CHARACTERS: CharacterDef[] = [
   },
   {
     id: 'rogue',
-    name: 'Vex',
+    name: '벡스',
     description: '민첩한 도적. 빠른 발과 치명타로 적을 난도질한다.',
     frame: FRAMES.ROGUE,
     startingWeaponId: 'knife',
@@ -38,7 +38,7 @@ export const CHARACTERS: CharacterDef[] = [
   },
   {
     id: 'cleric',
-    name: 'Seraphine',
+    name: '세라핀',
     description: '빛의 사제. 신성한 장막으로 적을 태우며 넓은 범위와 재생을 지녔다.',
     frame: FRAMES.CLERIC,
     startingWeaponId: 'sanctuary',
@@ -47,7 +47,7 @@ export const CHARACTERS: CharacterDef[] = [
   },
   {
     id: 'warrior',
-    name: 'Bjorn',
+    name: '비요른',
     description: '북방의 전사. 수호 영혼을 두르고 단단하게 전장을 누빈다.',
     frame: FRAMES.WARRIOR,
     startingWeaponId: 'orbit',

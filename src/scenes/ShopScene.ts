@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 
 import { SCENES } from '../types';
-import type { IconRef } from '../types';
-import { TEXTURES, FRAMES } from '../config/assets';
-import { COLORS, GAME, DEPTH, ENTITY_SCALE } from '../config/balance';
-import { POWERUPS } from '../content/powerups';
+import type { ConsumableDef, IconRef } from '../types';
+import { TEXTURES } from '../config/assets';
+import { COLORS, GAME, DEPTH, ENTITY_SCALE, RARITY } from '../config/balance';
+import { POWERUPS, CONSUMABLES } from '../content/powerups';
 import { CHARACTERS } from '../content/characters';
 import { WEAPONS } from '../content/weapons';
 import { MetaState } from '../state/MetaState';
@@ -110,7 +110,7 @@ export class ShopScene extends Phaser.Scene {
   private buildTitle(W: number): void {
     this.add
       .text(W / 2, 72, '상점', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '60px',
         color: hex(COLORS.GOLD_LIGHT),
@@ -122,7 +122,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, 124, '쌓아둔 골드로 영구 강화를 구입하고 새 영웅·무기를 해금하라', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '22px',
         color: hex(COLORS.PARCHMENT),
       })
@@ -136,14 +136,14 @@ export class ShopScene extends Phaser.Scene {
 
   private buildGold(W: number): void {
     this.add
-      .image(W - 184, 72, TEXTURES.SPRITES, FRAMES.COINS)
-      .setScale(ENTITY_SCALE * 1.7)
+      .image(W - 184, 72, TEXTURES.ICON_COIN)
+      .setScale(1.1)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT);
 
     this.goldText = this.add
       .text(W - 154, 72, '0', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '36px',
         color: hex(COLORS.GOLD_LIGHT),
@@ -156,6 +156,19 @@ export class ShopScene extends Phaser.Scene {
   /** Refresh the banked-gold readout (call after every purchase). */
   private refreshGold(): void {
     this.goldText.setText(`${MetaState.gold}`);
+  }
+
+  /** Brief green pulse on the gold readout when a refund pays out. */
+  private gainFeedback(): void {
+    this.goldText.setColor('#9fe89f');
+    this.tweens.add({
+      targets: this.goldText,
+      scale: { from: 1, to: 1.12 },
+      duration: 110,
+      yoyo: true,
+      ease: 'Sine.inOut',
+      onComplete: () => this.goldText.setColor(hex(COLORS.GOLD_LIGHT)),
+    });
   }
 
   /** Brief red flash on the gold readout to signal "not enough gold". */
@@ -179,6 +192,7 @@ export class ShopScene extends Phaser.Scene {
     const W = this.scale.width;
 
     this.sectionHeader(W, '강화  (POWER-UPS)', 158);
+    this.buildRefundAllButton(W, 158);
     const gridBottom = this.buildPowerups(W);
 
     // The unlock section sits below however tall the power-up grid came out
@@ -189,11 +203,11 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /** A left-aligned section heading with an underline, in the content layer. */
-  private sectionHeader(W: number, label: string, y: number): void {
+  private sectionHeader(W: number, label: string, y: number, hint?: string): void {
     const left = 56;
     const header = this.add
       .text(left, y, label, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '32px',
         color: hex(COLORS.GOLD),
@@ -207,6 +221,20 @@ export class ShopScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT);
     this.content.add([header, line]);
+
+    // optional right-aligned usage hint on the same line
+    if (hint) {
+      const h = this.add
+        .text(W - left, y + 2, hint, {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
+          fontSize: '18px',
+          color: hex(COLORS.TEXT_DIM),
+        })
+        .setOrigin(1, 0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.POPTEXT);
+      this.content.add(h);
+    }
   }
 
   /* --------------------------- power-ups -------------------------- */
@@ -214,6 +242,10 @@ export class ShopScene extends Phaser.Scene {
   /** Lay out the power-up grid; returns the grid's bottom Y. */
   private buildPowerups(W: number): number {
     const defs = Object.values(POWERUPS);
+    // One-shot consumables share the grid but get visually distinct cells
+    // (purple border + "1회성" badge) so they read as a different kind of buy.
+    const consumables = Object.values(CONSUMABLES);
+    const total = defs.length + consumables.length;
     const margin = 56;
     const colGap = 24;
     // Fit as many columns as the live width allows at a comfortable minimum
@@ -221,22 +253,26 @@ export class ShopScene extends Phaser.Scene {
     const usable = W - margin * 2;
     const cols = Phaser.Math.Clamp(Math.floor((usable + colGap) / (300 + colGap)), 3, 6);
     const cellW = Math.min(440, Math.floor((usable - (cols - 1) * colGap) / cols));
-    const rows = Math.ceil(defs.length / cols);
-    // Compress rows when the grid is tall so UNLOCKS + the back button still
-    // fit inside the fixed 1080 design height.
-    const cellH = rows <= 3 ? 120 : rows === 4 ? 112 : 96;
-    const rowGap = rows <= 3 ? 22 : 14;
+    const rows = Math.ceil(total / cols);
+    // Taller cells make room for the per-power-up description + refund button;
+    // compress if a future longer list ever pushes past 3 rows.
+    const cellH = rows <= 3 ? 140 : 112;
+    const rowGap = rows <= 3 ? 20 : 14;
     const totalW = cols * cellW + (cols - 1) * colGap;
     const startX = W / 2 - totalW / 2 + cellW / 2;
     const gridTop = 196;
 
-    defs.forEach((def, i) => {
+    for (let i = 0; i < total; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const cx = startX + col * (cellW + colGap);
       const cy = gridTop + cellH / 2 + row * (cellH + rowGap);
-      this.buildPowerupCell(def, cx, cy, cellW, cellH);
-    });
+      if (i < defs.length) {
+        this.buildPowerupCell(defs[i], cx, cy, cellW, cellH);
+      } else {
+        this.buildConsumableCell(consumables[i - defs.length], cx, cy, cellW, cellH);
+      }
+    }
 
     return gridTop + rows * (cellH + rowGap) - rowGap;
   }
@@ -260,9 +296,6 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT);
     this.content.add(panel);
 
-    // Vertical rhythm scales with the (possibly compressed) cell height.
-    const rowOff = Math.round(cellH * 0.27);
-
     // icon (left)
     const icon = this.add
       .image(cx - cellW / 2 + 46, cy, TEXTURES.PIXEL)
@@ -272,10 +305,12 @@ export class ShopScene extends Phaser.Scene {
     this.content.add(icon);
 
     const textLeft = cx - cellW / 2 + 86;
+    const rightEdge = cx + cellW / 2 - 24;
 
+    // --- row 1: name (left) + cost / MAX (right) ---
     const name = this.add
-      .text(textLeft, cy - rowOff, def.name, {
-        fontFamily: 'Cinzel, serif',
+      .text(textLeft, cy - 44, def.name, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '22px',
         color: hex(maxed ? COLORS.GOLD_LIGHT : COLORS.BONE),
@@ -283,28 +318,14 @@ export class ShopScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 1);
+    this.content.add(name);
 
-    const lvl = this.add
-      .text(textLeft, cy + 1, `Lv ${level}/${def.maxLevel}`, {
-        fontFamily: 'Cinzel, serif',
-        fontSize: '18px',
-        color: hex(COLORS.PARCHMENT),
-      })
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(DEPTH.POPTEXT + 1);
-    this.content.add([name, lvl]);
-
-    // pips
-    this.buildPips(textLeft, cy + rowOff, level, def.maxLevel);
-
-    // cost / MAX (right)
     if (maxed) {
       const max = this.add
-        .text(cx + cellW / 2 - 24, cy, 'MAX', {
-          fontFamily: 'Cinzel, serif',
+        .text(rightEdge, cy - 44, 'MAX', {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
-          fontSize: '26px',
+          fontSize: '24px',
           color: hex(COLORS.GOLD_LIGHT),
         })
         .setOrigin(1, 0.5)
@@ -312,26 +333,56 @@ export class ShopScene extends Phaser.Scene {
         .setDepth(DEPTH.POPTEXT + 1);
       this.content.add(max);
     } else {
-      const coin = this.add
-        .image(cx + cellW / 2 - 86, cy, TEXTURES.SPRITES, FRAMES.COINS)
-        .setScale(ENTITY_SCALE * 0.95)
-        .setScrollFactor(0)
-        .setDepth(DEPTH.POPTEXT + 1);
       const costTxt = this.add
-        .text(cx + cellW / 2 - 66, cy, `${cost}`, {
-          fontFamily: 'Cinzel, serif',
+        .text(rightEdge, cy - 44, `${cost}`, {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
           fontSize: '24px',
           color: hex(affordable ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT),
         })
-        .setOrigin(0, 0.5)
+        .setOrigin(1, 0.5)
         .setScrollFactor(0)
         .setDepth(DEPTH.POPTEXT + 1);
-      coin.setAlpha(affordable ? 1 : 0.5);
-      this.content.add([coin, costTxt]);
+      const coin = this.add
+        .image(rightEdge - costTxt.width - 20, cy - 44, TEXTURES.ICON_COIN)
+        .setScale(0.55)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.POPTEXT + 1)
+        .setAlpha(affordable ? 1 : 0.5);
+      this.content.add([costTxt, coin]);
     }
 
-    // hit area over the whole cell
+    // --- row 2: short effect description (full width) ---
+    const desc = this.add
+      .text(textLeft, cy - 24, def.description, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontSize: '16px',
+        color: hex(COLORS.PARCHMENT),
+        wordWrap: { width: cellW - 110 },
+      })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 1)
+      .setAlpha(0.85);
+    this.content.add(desc);
+
+    // --- row 3: pips (left) + Lv (mid-right) + refund button (right) ---
+    const rowY = cy + 42;
+    this.buildPips(textLeft, rowY, level, def.maxLevel);
+
+    const btnX = cx + cellW / 2 - 40;
+    const lvl = this.add
+      .text(btnX - 28, rowY, `Lv ${level}/${def.maxLevel}`, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontSize: '17px',
+        color: hex(COLORS.PARCHMENT),
+      })
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 1);
+    this.content.add(lvl);
+
+    // hit area over the whole cell = buy
     const zone = this.add
       .zone(cx, cy, cellW, cellH)
       .setOrigin(0.5)
@@ -341,6 +392,52 @@ export class ShopScene extends Phaser.Scene {
     zone.on('pointerout', () => panel.setStrokeStyle(3, COLORS.PANEL_BORDER));
     zone.on('pointerdown', () => this.tryBuyPowerup(def.id));
     this.content.add(zone);
+
+    // Refund button LAST: inside a Container the input priority follows the
+    // add order (depth is ignored for container children), so the minus zone
+    // must come after the buy zone or the buy zone swallows its clicks.
+    if (level > 0) this.buildRefundButton(btnX, rowY, def.id);
+  }
+
+  /** Small "−" square that refunds one owned level at full price. */
+  private buildRefundButton(x: number, y: number, id: string): void {
+    const s = 30;
+    const bg = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPTEXT + 2);
+    const draw = (hot: boolean): void => {
+      bg.clear();
+      bg.fillStyle(hot ? COLORS.BLOOD : COLORS.PANEL_LIGHT, hot ? 0.85 : 1)
+        .fillRoundedRect(x - s / 2, y - s / 2, s, s, 7);
+      bg.lineStyle(2, COLORS.BLOOD_LIGHT, 1).strokeRoundedRect(x - s / 2, y - s / 2, s, s, 7);
+    };
+    draw(false);
+
+    const minus = this.add
+      .text(x, y - 1, '−', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '24px',
+        color: hex(COLORS.BLOOD_LIGHT),
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 3);
+
+    const zone = this.add
+      .zone(x, y, s + 6, s + 6)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 3)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => {
+      draw(true);
+      minus.setColor('#ffffff');
+    });
+    zone.on('pointerout', () => {
+      draw(false);
+      minus.setColor(hex(COLORS.BLOOD_LIGHT));
+    });
+    zone.on('pointerdown', () => this.tryRefundPowerup(id));
+    this.content.add([bg, minus, zone]);
   }
 
   /** Row of `max` level pips (filled = owned) starting at left edge x. */
@@ -362,6 +459,241 @@ export class ShopScene extends Phaser.Scene {
 
   private tryBuyPowerup(id: string): void {
     if (MetaState.buyPowerup(id)) {
+      this.rebuild();
+      this.refreshGold();
+    } else {
+      this.denyFeedback();
+    }
+  }
+
+  private tryRefundPowerup(id: string): void {
+    if (MetaState.refundPowerup(id)) {
+      this.rebuild();
+      this.refreshGold();
+      this.gainFeedback();
+    } else {
+      this.denyFeedback();
+    }
+  }
+
+  /**
+   * "전체 환불" button on the POWER-UPS header line, with the usage hint to its
+   * left. Two-step confirm: the first click arms it (label changes for 2.5s),
+   * the second click refunds every owned level at full price.
+   */
+  private buildRefundAllButton(W: number, y: number): void {
+    const right = W - 56;
+    const w = 150;
+    const h = 38;
+    const bx = right - w / 2;
+
+    const hint = this.add
+      .text(right - w - 24, y + 2, '셀 클릭 = 구매   ·   − = 1레벨 환불 (전액)', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontSize: '18px',
+        color: hex(COLORS.TEXT_DIM),
+      })
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT);
+    this.content.add(hint);
+
+    const bg = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPTEXT + 1);
+    const draw = (hot: boolean, armed: boolean): void => {
+      bg.clear();
+      bg.fillStyle(armed ? COLORS.BLOOD : hot ? COLORS.PANEL_LIGHT : COLORS.PANEL, armed ? 0.85 : 1)
+        .fillRoundedRect(bx - w / 2, y - h / 2, w, h, 9);
+      bg.lineStyle(2, COLORS.BLOOD_LIGHT, hot || armed ? 1 : 0.75)
+        .strokeRoundedRect(bx - w / 2, y - h / 2, w, h, 9);
+    };
+    draw(false, false);
+
+    const label = this.add
+      .text(bx, y, '전체 환불', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '20px',
+        color: hex(COLORS.BLOOD_LIGHT),
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 2);
+
+    let armed = false;
+    let disarmTimer: Phaser.Time.TimerEvent | undefined;
+    const disarm = (): void => {
+      armed = false;
+      // guard: a purchase/refund rebuild may have destroyed these objects
+      if (!label.scene) return;
+      label.setText('전체 환불').setColor(hex(COLORS.BLOOD_LIGHT));
+      draw(false, false);
+    };
+
+    const zone = this.add
+      .zone(bx, y, w, h)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => draw(true, armed));
+    zone.on('pointerout', () => draw(false, armed));
+    zone.on('pointerdown', () => {
+      if (!armed) {
+        armed = true;
+        label.setText('한 번 더 클릭').setColor('#ffffff');
+        draw(true, true);
+        disarmTimer = this.time.delayedCall(2500, disarm);
+      } else {
+        disarmTimer?.remove();
+        const total = MetaState.refundAllPowerups();
+        if (total > 0) {
+          this.rebuild();
+          this.refreshGold();
+          this.gainFeedback();
+        } else {
+          disarm();
+          this.denyFeedback();
+        }
+      }
+    });
+    this.content.add([bg, label, zone]);
+  }
+
+  /* -------------------------- consumables ------------------------- */
+
+  /**
+   * A one-shot consumable cell. Visually distinct from power-ups: purple
+   * (RARE) border, a "1회성" corner badge, the effect text instead of level
+   * pips, and a "준비됨" state while one is held (max 1 at a time).
+   */
+  private buildConsumableCell(
+    def: ConsumableDef,
+    cx: number,
+    cy: number,
+    cellW: number,
+    cellH: number
+  ): void {
+    const held = MetaState.hasConsumable(def.id);
+    const affordable = MetaState.gold >= def.cost;
+    const accent = RARITY.RARE; // purple — the consumable signature colour
+    const accentHot = 0xd0a6ff;
+
+    const panel = this.add
+      .rectangle(cx, cy, cellW, cellH, COLORS.PANEL, 0.92)
+      .setStrokeStyle(3, accent)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT);
+    this.content.add(panel);
+
+    // "1회성" badge pinned to the cell's top-right corner.
+    const badgeText = this.add
+      .text(cx + cellW / 2 - 14, cy - cellH / 2 + 16, '1회성', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '15px',
+        color: '#0a0a12',
+      })
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 2);
+    const badgeBg = this.add
+      .rectangle(
+        badgeText.x - badgeText.width / 2,
+        badgeText.y,
+        badgeText.width + 18,
+        24,
+        accent,
+        1
+      )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 1);
+    this.content.add([badgeBg, badgeText]);
+
+    // icon (left)
+    const icon = this.add
+      .image(cx - cellW / 2 + 46, cy, TEXTURES.PIXEL)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 1);
+    this.applyIcon(icon, def.icon, ENTITY_SCALE * 2.3);
+    this.content.add(icon);
+
+    const textLeft = cx - cellW / 2 + 86;
+    const rightEdge = cx + cellW / 2 - 24;
+
+    // --- row 1: name ---
+    const name = this.add
+      .text(textLeft, cy - 44, def.name, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '22px',
+        color: hex(held ? COLORS.GOLD_LIGHT : accentHot),
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 1);
+    this.content.add(name);
+
+    // --- row 2: effect / state description ---
+    const desc = this.add
+      .text(textLeft, cy - 24, held ? '준비됨 · 다음 런에 자동 사용' : def.description, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontSize: '16px',
+        color: hex(COLORS.PARCHMENT),
+        wordWrap: { width: cellW - 110 },
+      })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPTEXT + 1)
+      .setAlpha(0.9);
+    this.content.add(desc);
+
+    // --- row 3: cost / held state (bottom-right) ---
+    if (held) {
+      const ready = this.add
+        .text(rightEdge, cy + 42, '✦ 준비됨', {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
+          fontStyle: '700',
+          fontSize: '22px',
+          color: hex(COLORS.GOLD_LIGHT),
+        })
+        .setOrigin(1, 0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.POPTEXT + 1);
+      this.content.add(ready);
+    } else {
+      const costTxt = this.add
+        .text(rightEdge, cy + 42, `${def.cost}`, {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
+          fontStyle: '700',
+          fontSize: '24px',
+          color: hex(affordable ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT),
+        })
+        .setOrigin(1, 0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.POPTEXT + 1);
+      const coin = this.add
+        .image(rightEdge - costTxt.width - 20, cy + 42, TEXTURES.ICON_COIN)
+        .setScale(0.55)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.POPTEXT + 1)
+        .setAlpha(affordable ? 1 : 0.5);
+      this.content.add([costTxt, coin]);
+    }
+
+    const zone = this.add
+      .zone(cx, cy, cellW, cellH)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: !held });
+    zone.on('pointerover', () => panel.setStrokeStyle(3, accentHot));
+    zone.on('pointerout', () => panel.setStrokeStyle(3, accent));
+    zone.on('pointerdown', () => this.tryBuyConsumable(def.id, held));
+    this.content.add(zone);
+  }
+
+  private tryBuyConsumable(id: string, held: boolean): void {
+    if (held) return; // already stocked — nothing to buy
+    if (MetaState.buyConsumable(id)) {
       this.rebuild();
       this.refreshGold();
     } else {
@@ -396,7 +728,7 @@ export class ShopScene extends Phaser.Scene {
     if (entries.length === 0) {
       const note = this.add
         .text(W / 2, headerY + 120, '✦  모두 해금됨  ✦', {
-          fontFamily: 'Cinzel, serif',
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
           fontSize: '30px',
           color: hex(COLORS.GOLD),
@@ -450,7 +782,7 @@ export class ShopScene extends Phaser.Scene {
 
     const name = this.add
       .text(cx, cy + 24, e.name, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
         color: hex(COLORS.BONE),
@@ -461,7 +793,7 @@ export class ShopScene extends Phaser.Scene {
 
     const cost = this.add
       .text(cx, cy + 56, `🔒 ${e.cost}`, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
         color: hex(affordable ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT),
@@ -511,7 +843,7 @@ export class ShopScene extends Phaser.Scene {
 
     const txt = this.add
       .text(0, 0, '뒤로  (ESC)', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '26px',
         color: hex(COLORS.BONE),

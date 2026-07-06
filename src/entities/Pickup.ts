@@ -113,9 +113,10 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
         this.setCircleBody(6);
         break;
       case 'gold':
-        this.setTexture(TEXTURES.SPRITES, FRAMES.COINS);
-        this.setScale(ENTITY_SCALE * 0.8);
-        this.setCircleBody(6);
+        // generated 48px coin icon; scale down to gem-ish pickup size
+        this.setTexture(TEXTURES.ICON_COIN);
+        this.setScale(0.5);
+        this.setCircleBody(18);
         break;
       case 'magnet':
         this.setTexture(TEXTURES.RING, 0);

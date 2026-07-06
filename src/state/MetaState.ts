@@ -8,13 +8,16 @@
  */
 import type { PlayerStats } from '../types';
 import { REGISTRY } from '../types';
-import { POWERUPS } from '../content/powerups';
+import { POWERUPS, CONSUMABLES } from '../content/powerups';
 
 interface MetaSave {
   gold: number;
   powerups: Record<string, number>; // powerup id -> owned level
+  consumables: Record<string, number>; // consumable id -> held count (0 or 1)
   characters: string[]; // unlocked character ids
   weapons: string[]; // unlocked weapon ids
+  /** highest curse level beaten; -1 = base game not yet cleared */
+  maxCurseCleared: number;
 }
 
 /** Unlocked from the start (the original game); the rest is shop-unlockable. */
@@ -37,8 +40,10 @@ function defaults(): MetaSave {
   return {
     gold: 0,
     powerups: {},
+    consumables: {},
     characters: [...DEFAULT_CHARS],
     weapons: [...DEFAULT_WEAPONS],
+    maxCurseCleared: -1,
   };
 }
 
@@ -57,8 +62,13 @@ class Meta {
         this.data = {
           gold: typeof p.gold === 'number' && p.gold >= 0 ? p.gold : 0,
           powerups: p.powerups && typeof p.powerups === 'object' ? p.powerups : {},
+          consumables: p.consumables && typeof p.consumables === 'object' ? p.consumables : {},
           characters: Array.isArray(p.characters) ? p.characters.slice() : [...DEFAULT_CHARS],
           weapons: Array.isArray(p.weapons) ? p.weapons.slice() : [...DEFAULT_WEAPONS],
+          maxCurseCleared:
+            typeof p.maxCurseCleared === 'number' && p.maxCurseCleared >= -1
+              ? Math.floor(p.maxCurseCleared)
+              : -1,
         };
       }
     } catch {
@@ -67,6 +77,11 @@ class Meta {
     // Defaults are always unlocked, even if an older save lacked them.
     for (const c of DEFAULT_CHARS) if (!this.data.characters.includes(c)) this.data.characters.push(c);
     for (const w of DEFAULT_WEAPONS) if (!this.data.weapons.includes(w)) this.data.weapons.push(w);
+    // Prune power-up ids that no longer exist (the shop list was curated down);
+    // stale levels would otherwise linger in the save forever.
+    for (const id of Object.keys(this.data.powerups)) {
+      if (!POWERUPS[id]) delete this.data.powerups[id];
+    }
   }
 
   private save(): void {
@@ -125,6 +140,46 @@ class Meta {
     return true;
   }
 
+  /** Gold returned by refunding the TOP owned level (full price), or null. */
+  powerupRefund(id: string): number | null {
+    const def = POWERUPS[id];
+    if (!def) return null;
+    const lvl = this.getPowerupLevel(id);
+    if (lvl <= 0) return null;
+    return def.costPerLevel * lvl; // what that level cost when bought
+  }
+
+  /** Refund one level of a power-up at full price. */
+  refundPowerup(id: string): boolean {
+    const refund = this.powerupRefund(id);
+    if (refund === null) return false;
+    this.data.powerups[id] = this.getPowerupLevel(id) - 1;
+    this.data.gold += refund;
+    this.save();
+    return true;
+  }
+
+  /**
+   * Refund EVERY owned power-up level at full price (sum of what each level
+   * cost: costPerLevel × (1+2+…+level)). Returns the gold paid back.
+   */
+  refundAllPowerups(): number {
+    this.load();
+    let total = 0;
+    for (const id of Object.keys(this.data.powerups)) {
+      const def = POWERUPS[id];
+      const lvl = this.data.powerups[id];
+      if (!def || lvl <= 0) continue;
+      total += (def.costPerLevel * lvl * (lvl + 1)) / 2;
+      this.data.powerups[id] = 0;
+    }
+    if (total > 0) {
+      this.data.gold += total;
+      this.save();
+    }
+    return total;
+  }
+
   /** Apply every owned power-up to a (base) stat block. */
   applyPowerups(stats: PlayerStats): void {
     this.load();
@@ -133,6 +188,49 @@ class Meta {
       const lvl = this.data.powerups[id];
       if (def && lvl > 0) def.apply(stats, lvl);
     }
+  }
+
+  /* --------------------------- hard mode -------------------------- */
+
+  /** Highest curse level beaten (-1 = base game not yet cleared). */
+  get maxCurseCleared(): number {
+    this.load();
+    return this.data.maxCurseCleared;
+  }
+
+  /** Record a victory at the given curse level (raises the unlock ceiling). */
+  recordVictory(curse: number): void {
+    this.load();
+    if (curse > this.data.maxCurseCleared) {
+      this.data.maxCurseCleared = curse;
+      this.save();
+    }
+  }
+
+  /* -------------------------- consumables ------------------------- */
+
+  /** Whether a one-shot consumable is currently held (waiting for a run). */
+  hasConsumable(id: string): boolean {
+    this.load();
+    return (this.data.consumables[id] ?? 0) > 0;
+  }
+
+  /** Buy a consumable. Only one of each can be held at a time. */
+  buyConsumable(id: string): boolean {
+    const def = CONSUMABLES[id];
+    if (!def || this.hasConsumable(id)) return false;
+    if (!this.spend(def.cost)) return false;
+    this.data.consumables[id] = 1;
+    this.save();
+    return true;
+  }
+
+  /** Consume a held consumable (called at run start). Returns whether held. */
+  consumeConsumable(id: string): boolean {
+    if (!this.hasConsumable(id)) return false;
+    this.data.consumables[id] = 0;
+    this.save();
+    return true;
   }
 
   /* ---------------------------- unlocks --------------------------- */

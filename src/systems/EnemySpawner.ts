@@ -11,7 +11,7 @@
 import Phaser from 'phaser';
 import type { EnemyDef, GameContext, IEnemySpawner, WaveEntry } from '../types';
 import { ENEMIES, WAVES } from '../content/enemies';
-import { SPAWN } from '../config/balance';
+import { SPAWN, curseMults } from '../config/balance';
 import { Enemy } from '../entities/Enemy';
 
 export class EnemySpawner implements IEnemySpawner {
@@ -49,16 +49,19 @@ export class EnemySpawner implements IEnemySpawner {
     if (!wave) return;
 
     // --- 2. cadence spawning --------------------------------------------
+    // The curse contract raises the concurrent cap; a surge run-event (blood
+    // moon) additionally speeds up the cadence and adds a flat cap bonus.
     this.spawnAccum += delta;
-    const intervalMs = wave.spawnIntervalSec * 1000;
+    const intervalMs = (wave.spawnIntervalSec * 1000) / (ctx.run.eventSpawnRate || 1);
     if (this.spawnAccum < intervalMs) return;
     this.spawnAccum -= intervalMs;
 
+    const cap = Math.round(wave.cap * curseMults(ctx.run.curse).cap) + ctx.run.eventCapBonus;
     const alive = ctx.enemies.countActive(true);
-    if (alive >= wave.cap) return;
+    if (alive >= cap) return;
 
     // don't overshoot the cap with this burst.
-    const room = wave.cap - alive;
+    const room = cap - alive;
     const toSpawn = Math.min(wave.burst, room);
     if (toSpawn <= 0) return;
 
@@ -88,11 +91,17 @@ export class EnemySpawner implements IEnemySpawner {
     return idx;
   }
 
+  /** Spawn one enemy by id at an absolute position (used by run events). */
+  spawnAt(id: string, x: number, y: number): void {
+    const def = ENEMIES[id];
+    if (def) this.spawnEnemy(def, x, y);
+  }
+
   /**
    * Spawn radius: half the on-screen diagonal (accounting for camera zoom)
    * plus RING_PAD, so enemies materialise just out of sight.
    */
-  private ringRadius(): number {
+  ringRadius(): number {
     const cam = this.ctx.scene.cameras.main;
     const zoom = cam.zoom || 1;
     const halfW = cam.width / zoom / 2;

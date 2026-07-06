@@ -26,9 +26,16 @@ export class LevelUpOverlay {
   private readonly bannerSub: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
 
+  /** reroll button chrome (hidden when no charges remain this run). */
+  private readonly rerollBtn: Phaser.GameObjects.Container;
+  private readonly rerollBg: Phaser.GameObjects.Graphics;
+  private readonly rerollLabel: Phaser.GameObjects.Text;
+  private readonly rerollZone: Phaser.GameObjects.Zone;
+
   /** per-show card state. */
   private cards: CardView[] = [];
   private options: UpgradeOption[] = [];
+  private rerollsLeft = 0;
   private selectedIndex = 0;
   private visible = false;
   /** guards against double-selecting before hide completes. */
@@ -66,7 +73,7 @@ export class LevelUpOverlay {
     // "LEVEL UP!" gothic banner.
     this.banner = scene.add
       .text(cx, 140, 'LEVEL UP!', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '88px',
         color: '#f0d896',
@@ -79,7 +86,7 @@ export class LevelUpOverlay {
 
     this.bannerSub = scene.add
       .text(cx, 220, '', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '22px',
         color: '#c9a24b',
       })
@@ -89,13 +96,35 @@ export class LevelUpOverlay {
 
     this.hint = scene.add
       .text(cx, GAME.HEIGHT - 52, '1 / 2 / 3  ·  ←  →  ·  ENTER', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: '#9a8f78',
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
     this.root.add(this.hint);
+
+    // Reroll button between the cards and the hint line. Only visible while
+    // the run has charges left (Mirror of Fate shop power-up).
+    this.rerollBtn = scene.add.container(cx, GAME.HEIGHT - 118).setScrollFactor(0);
+    this.rerollBg = scene.add.graphics();
+    this.rerollLabel = scene.add
+      .text(0, 0, '', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '26px',
+        color: '#f0d896',
+      })
+      .setOrigin(0.5);
+    this.rerollZone = scene.add
+      .zone(0, 0, 10, 10)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.rerollZone.on('pointerover', () => this.drawRerollBg(true));
+    this.rerollZone.on('pointerout', () => this.drawRerollBg(false));
+    this.rerollZone.on('pointerdown', () => this.requestReroll());
+    this.rerollBtn.add([this.rerollBg, this.rerollLabel, this.rerollZone]);
+    this.root.add(this.rerollBtn);
   }
 
   /** Whether the overlay is currently on screen. */
@@ -104,15 +133,17 @@ export class LevelUpOverlay {
   }
 
   /** Present a fresh set of option cards (rebuilt every call). */
-  show(level: number, options: UpgradeOption[]): void {
+  show(level: number, options: UpgradeOption[], rerollsLeft = 0): void {
     this.destroyCards();
     this.options = options;
+    this.rerollsLeft = rerollsLeft;
     this.selectedIndex = 0;
     this.visible = true;
     this.locked = false;
 
     this.relayout(); // re-centre the static chrome for the current live width
     this.bannerSub.setText(`Lv ${level}  —  강화를 선택하세요`);
+    this.updateRerollButton();
     this.root.setVisible(true);
 
     this.buildCards(options);
@@ -170,6 +201,45 @@ export class LevelUpOverlay {
     this.banner.setX(cx);
     this.bannerSub.setX(cx);
     this.hint.setX(cx);
+    this.rerollBtn.setX(cx);
+  }
+
+  /* --------------------------------------------------------------- */
+  /* Reroll button                                                    */
+  /* --------------------------------------------------------------- */
+
+  /** Sync the reroll button to the remaining charge count (hide at 0). */
+  private updateRerollButton(): void {
+    if (this.rerollsLeft <= 0) {
+      this.rerollBtn.setVisible(false);
+      return;
+    }
+    this.rerollLabel.setText(`⟳  새로고침 (R)  ·  남은 ${this.rerollsLeft}회`);
+    this.rerollZone.setSize(this.rerollLabel.width + 64, 56);
+    this.rerollZone.setInteractive({ useHandCursor: true });
+    this.drawRerollBg(false);
+    this.rerollBtn.setVisible(true);
+  }
+
+  private drawRerollBg(hot: boolean): void {
+    const w = this.rerollLabel.width + 64;
+    const h = 56;
+    this.rerollBg.clear();
+    this.rerollBg
+      .fillStyle(hot ? COLORS.PANEL_LIGHT : COLORS.PANEL, 0.95)
+      .fillRoundedRect(-w / 2, -h / 2, w, h, 12);
+    this.rerollBg
+      .lineStyle(3, COLORS.GOLD, hot ? 1 : 0.75)
+      .strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
+  }
+
+  /**
+   * Spend a reroll charge. The GameScene answers synchronously with a fresh
+   * LEVEL_UP event, which re-enters show() and rebuilds the cards.
+   */
+  private requestReroll(): void {
+    if (!this.visible || this.locked || this.rerollsLeft <= 0) return;
+    this.gameEvents.emit(EVENTS.REROLL_REQUESTED, {});
   }
 
   /* --------------------------------------------------------------- */
@@ -219,7 +289,7 @@ export class LevelUpOverlay {
     // tag pill (NEW / Lv N) top-right.
     const tagText = scene.add
       .text(w / 2 - 28, -h / 2 + 44, opt.tag, {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: '#0a0a12',
       })
@@ -250,7 +320,7 @@ export class LevelUpOverlay {
     // name (Cinzel heading).
     const name = scene.add
       .text(0, iconBoxY + 104, opt.name, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '36px',
         color: '#e8e0d0',
@@ -264,7 +334,7 @@ export class LevelUpOverlay {
     const typeLabel = opt.isWeapon ? '무기' : '아이템';
     const sub = scene.add
       .text(0, iconBoxY + 168, typeLabel, {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: '#9a8f78',
       })
@@ -274,7 +344,7 @@ export class LevelUpOverlay {
     // description.
     const desc = scene.add
       .text(0, iconBoxY + 208, opt.description, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '26px',
         color: '#c9bfa8',
         align: 'center',
@@ -464,6 +534,10 @@ export class LevelUpOverlay {
         case 'Enter':
         case ' ':
           this.select(this.selectedIndex);
+          break;
+        case 'r':
+        case 'R':
+          this.requestReroll();
           break;
         default:
           return;

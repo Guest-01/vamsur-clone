@@ -2,13 +2,14 @@ import Phaser from 'phaser';
 
 import { SCENES, REGISTRY } from '../types';
 import type { CharacterDef, IconRef, PlayerStats } from '../types';
-import { TEXTURES, FRAMES } from '../config/assets';
+import { TEXTURES } from '../config/assets';
 import {
   COLORS,
   GAME,
   DEPTH,
   ENTITY_SCALE,
   DEFAULT_STATS,
+  MAX_CURSE,
 } from '../config/balance';
 import { CHARACTERS } from '../content/characters';
 import { WEAPONS } from '../content/weapons';
@@ -63,6 +64,11 @@ export class MenuScene extends Phaser.Scene {
   private bg!: Phaser.GameObjects.TileSprite;
   private wanderers: Wanderer[] = [];
   private help!: HelpOverlay;
+  /** curse-contract level chosen for the next run (hard mode). */
+  private curse = 0;
+  /** highest selectable curse level (maxCurseCleared + 1, capped). */
+  private maxCurse = 0;
+  private curseLabel?: Phaser.GameObjects.Text;
   /** transient "this character is locked" hint shown on a blocked descend. */
   private lockHint?: Phaser.GameObjects.Text;
   /** live width captured at build time; used to throttle resize restarts. */
@@ -77,12 +83,29 @@ export class MenuScene extends Phaser.Scene {
     const H = GAME.HEIGHT; // fixed design height (1080)
     this.lastW = W;
 
+    // The scene instance is REUSED across restarts (returning from a run /
+    // shop, resize). Reset the per-build collections, otherwise
+    // refreshSelection() keeps indexing destroyed cards from the previous
+    // build and the freshly built cards all render as unselected (dim).
+    this.cards = [];
+    this.cardFrames = [];
+    this.wanderers = [];
+
     MetaState.load();
 
     // Restore the last picked character if we have one.
     const savedId = this.registry.get(REGISTRY.SELECTED_CHARACTER) as string | undefined;
     const savedIdx = CHARACTERS.findIndex((c) => c.id === savedId);
     if (savedIdx >= 0) this.selected = savedIdx;
+
+    // Hard mode: unlocked one level at a time by winning at the previous one.
+    this.maxCurse = Math.min(MAX_CURSE, MetaState.maxCurseCleared + 1);
+    const savedCurse = this.registry.get(REGISTRY.CURSE);
+    this.curse = Phaser.Math.Clamp(
+      typeof savedCurse === 'number' ? savedCurse : 0,
+      0,
+      Math.max(0, this.maxCurse)
+    );
 
     this.buildBackdrop(W, H);
     this.buildWanderers(W, H);
@@ -198,7 +221,7 @@ export class MenuScene extends Phaser.Scene {
   private buildTitle(W: number): void {
     const title = this.add
       .text(W / 2, 116, '영원한 밤의 묘지', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '80px',
         color: hex(COLORS.GOLD_LIGHT),
@@ -220,7 +243,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, 192, 'Crypt of the Eternal Night — 끝없이 밀려드는 어둠 속에서 살아남아라', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '28px',
         color: hex(COLORS.PARCHMENT),
       })
@@ -267,7 +290,7 @@ export class MenuScene extends Phaser.Scene {
 
       const name = this.add
         .text(0, 72, char.name, {
-          fontFamily: 'Cinzel, serif',
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
           fontSize: '34px',
           color: hex(COLORS.BONE),
@@ -277,7 +300,7 @@ export class MenuScene extends Phaser.Scene {
       const hpStat = this.statLine(char);
       const role = this.add
         .text(0, 114, hpStat, {
-          fontFamily: 'Cinzel, serif',
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
           fontSize: '26px',
           color: hex(COLORS.PARCHMENT),
@@ -299,7 +322,7 @@ export class MenuScene extends Phaser.Scene {
         const cost = MetaState.characterUnlockCost(char.id) ?? 0;
         const costTxt = this.add
           .text(0, 138, `🔒 ${cost}`, {
-            fontFamily: 'Cinzel, serif',
+            fontFamily: 'Cinzel, "Noto Serif KR", serif',
             fontStyle: '700',
             fontSize: '24px',
             color: hex(COLORS.GOLD_LIGHT),
@@ -379,7 +402,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.detailName = this.add
       .text(left, top, '', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '44px',
         color: hex(COLORS.GOLD_LIGHT),
@@ -388,7 +411,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.detailDesc = this.add
       .text(left, top + 64, '', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '26px',
         color: hex(COLORS.PARCHMENT),
         wordWrap: { width: pw - 96 },
@@ -397,7 +420,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.detailBlurb = this.add
       .text(left, top + 124, '', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
         color: hex(COLORS.GOLD),
@@ -412,7 +435,7 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT);
     this.detailWeapon = this.add
       .text(wx + 56, py - 30, '', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
         color: hex(COLORS.BONE),
@@ -423,7 +446,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.detailStats = this.add
       .text(wx + 56, py + 14, '', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '22px',
         color: hex(COLORS.PARCHMENT),
         align: 'left',
@@ -435,23 +458,29 @@ export class MenuScene extends Phaser.Scene {
   /* -------------------------- footer ------------------------------ */
 
   private buildFooter(W: number, H: number): void {
-    // best survival time
+    // Best survival time — top-right under the guide button, mirroring the
+    // gold readout under the shop button on the left. Moving it out of the
+    // bottom stack gives the detail panel / curse row / descend prompt room
+    // to breathe instead of crowding four text rows into 180px.
     const best = this.loadBestMs();
-    const bestStr = best > 0 ? `최고 생존 ${formatTime(best)}` : '최고 생존 기록 없음';
+    const bestStr = best > 0 ? `🏆 최고 생존 ${formatTime(best)}` : '🏆 기록 없음';
     this.add
-      .text(W / 2, 864, bestStr, {
-        fontFamily: 'Cinzel, serif',
+      .text(W - 40, 108, bestStr, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
-        fontSize: '30px',
+        fontSize: '26px',
         color: hex(COLORS.GOLD),
       })
-      .setOrigin(0.5)
+      .setOrigin(1, 0.5)
       .setDepth(DEPTH.POPTEXT);
+
+    // curse-contract selector — only after the base game has been beaten
+    if (this.maxCurse > 0) this.buildCurseSelector(W);
 
     // "Descend" prompt — pulsing call to action
     const descend = this.add
       .text(W / 2, 940, '◆  ENTER / 클릭하여 강림  ◆', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '40px',
         color: hex(COLORS.BONE),
@@ -474,7 +503,7 @@ export class MenuScene extends Phaser.Scene {
     // controls hint
     this.add
       .text(W / 2, 1012, 'WASD / 방향키 이동   •   자동 공격   •   ESC 일시정지   •   ← → 캐릭터 선택', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '24px',
         color: hex(COLORS.PARCHMENT),
       })
@@ -484,7 +513,7 @@ export class MenuScene extends Phaser.Scene {
     // guide / how-to-play button (also opens with the H key)
     const guide = this.add
       .text(W - 40, 56, '? 가이드  (H)', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '26px',
         color: hex(COLORS.PARCHMENT),
@@ -499,7 +528,7 @@ export class MenuScene extends Phaser.Scene {
     // shop button (top-left, mirrors the guide button; also opens with B)
     const shop = this.add
       .text(40, 56, '⚒ 상점  (B)', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '26px',
         color: hex(COLORS.PARCHMENT),
@@ -513,12 +542,12 @@ export class MenuScene extends Phaser.Scene {
 
     // banked gold readout (top-left, under the shop button)
     this.add
-      .image(58, 108, TEXTURES.SPRITES, FRAMES.COINS)
-      .setScale(ENTITY_SCALE * 1.5)
+      .image(58, 108, TEXTURES.ICON_COIN)
+      .setScale(1)
       .setDepth(DEPTH.POPTEXT);
     this.add
       .text(84, 108, `${MetaState.gold}`, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '28px',
         color: hex(COLORS.GOLD_LIGHT),
@@ -529,7 +558,7 @@ export class MenuScene extends Phaser.Scene {
     // unofficial fan-project disclaimer (bottom-left)
     this.add
       .text(16, H - 12, 'Vampire Survivors에서 영감받은 비공식·비영리 팬 프로젝트 (poncle과 무관)', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '16px',
         color: hex(COLORS.TEXT_DIM),
       })
@@ -540,13 +569,67 @@ export class MenuScene extends Phaser.Scene {
     // CC0 credit
     this.add
       .text(W - 16, H - 12, 'Art: Kenney — CC0', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '16px',
         color: hex(COLORS.TEXT_DIM),
       })
       .setOrigin(1, 1)
       .setDepth(DEPTH.POPTEXT)
       .setAlpha(0.7);
+  }
+
+  /* ----------------------- curse selector ------------------------- */
+
+  /**
+   * Hard-mode row: `◀ ☠ 저주 계약 ... ▶` between the best time and the descend
+   * prompt. Levels unlock one at a time (beat curse N to open N+1); the chosen
+   * level rides along to GameScene via the descend payload.
+   */
+  private buildCurseSelector(W: number): void {
+    const y = 884;
+
+    this.curseLabel = this.add
+      .text(W / 2, y, this.curseText(), {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '26px',
+        color: hex(this.curse > 0 ? COLORS.BLOOD_LIGHT : COLORS.PARCHMENT),
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.POPTEXT);
+
+    const mkArrow = (x: number, glyph: string, dir: number): void => {
+      const t = this.add
+        .text(x, y, glyph, {
+          fontFamily: 'sans-serif',
+          fontSize: '30px',
+          color: hex(COLORS.PARCHMENT),
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH.POPTEXT)
+        .setInteractive({ useHandCursor: true });
+      t.on('pointerover', () => t.setColor(hex(COLORS.GOLD_LIGHT)));
+      t.on('pointerout', () => t.setColor(hex(COLORS.PARCHMENT)));
+      t.on('pointerdown', () => this.changeCurse(dir));
+    };
+    mkArrow(W / 2 - 360, '◀', -1);
+    mkArrow(W / 2 + 360, '▶', 1);
+  }
+
+  private curseText(): string {
+    if (this.curse <= 0) return '☠ 저주 계약: 없음  (W/S · ▲▼)';
+    const c = this.curse;
+    return `☠ 저주 ${c}단계 — 적 강화 +${20 * c}% · 골드 +${25 * c}% · 경험치 +${15 * c}%`;
+  }
+
+  private changeCurse(dir: number): void {
+    if (this.maxCurse <= 0 || this.help?.isVisible()) return;
+    this.curse = Phaser.Math.Clamp(this.curse + dir, 0, this.maxCurse);
+    this.registry.set(REGISTRY.CURSE, this.curse);
+    if (this.curseLabel) {
+      this.curseLabel.setText(this.curseText());
+      this.curseLabel.setColor(hex(this.curse > 0 ? COLORS.BLOOD_LIGHT : COLORS.PARCHMENT));
+    }
   }
 
   /* --------------------------- input ------------------------------ */
@@ -563,6 +646,10 @@ export class MenuScene extends Phaser.Scene {
     kb.on('keydown-SPACE', () => this.descend());
     kb.on('keydown-H', () => this.help.toggle());
     kb.on('keydown-B', () => this.openShop());
+    kb.on('keydown-UP', () => this.changeCurse(1));
+    kb.on('keydown-DOWN', () => this.changeCurse(-1));
+    kb.on('keydown-W', () => this.changeCurse(1));
+    kb.on('keydown-S', () => this.changeCurse(-1));
     kb.on('keydown-ESC', () => {
       if (this.help.isVisible()) this.help.hide();
     });
@@ -671,7 +758,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.enabled = false;
     this.cameras.main.fadeOut(320, 7, 7, 12);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start(SCENES.GAME, { characterId: char.id });
+      this.scene.start(SCENES.GAME, { characterId: char.id, curse: this.curse });
     });
   }
 
@@ -680,7 +767,7 @@ export class MenuScene extends Phaser.Scene {
     this.lockHint?.destroy();
     this.lockHint = this.add
       .text(this.scale.width / 2, 900, '🔒 상점에서 해금하세요', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '30px',
         color: hex(COLORS.BLOOD_LIGHT),

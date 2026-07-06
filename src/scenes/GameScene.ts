@@ -13,6 +13,7 @@ import {
   type UpgradeOption,
   type OwnedWeaponView,
   type OwnedItemView,
+  type WeaponDamageView,
   type EnemySprite,
 } from '../types';
 import { TEXTURES } from '../config/assets';
@@ -23,10 +24,12 @@ import {
   RUN,
   SPAWN,
   CAMERA_ZOOM,
+  curseMults,
   xpForLevel,
 } from '../config/balance';
 import { createBaseStats, recomputeStats } from '../systems/stats';
 import { getCharacter } from '../content/characters';
+import { WEAPONS } from '../content/weapons';
 import { MetaState } from '../state/MetaState';
 
 // The integrator imports the concrete entity/system classes and wires them
@@ -40,6 +43,7 @@ import { EnemySpawner } from '../systems/EnemySpawner';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
 import { UpgradeSystem } from '../systems/UpgradeSystem';
+import { RunEvents } from '../systems/RunEvents';
 
 /**
  * GameScene — the heart of the run. It builds the world (scrolling background,
@@ -55,6 +59,8 @@ export class GameScene extends Phaser.Scene {
   // --- run identity -------------------------------------------------------
   private characterId!: CharacterId;
   private character!: CharacterDef;
+  /** curse contract level for this run (0 = none; chosen in the menu) */
+  private curse = 0;
 
   // --- world objects ------------------------------------------------------
   // The infinite floor lives here (world space). The vignette + ambient dust
@@ -70,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   // --- entities / systems -------------------------------------------------
   private player!: Player;
   private spawner!: EnemySpawner;
+  private runEvents!: RunEvents;
 
   // --- shared state -------------------------------------------------------
   private stats!: PlayerStats;
@@ -97,8 +104,9 @@ export class GameScene extends Phaser.Scene {
     super(SCENES.GAME);
   }
 
-  init(data: { characterId: CharacterId }): void {
+  init(data: { characterId: CharacterId; curse?: number }): void {
     this.characterId = data?.characterId ?? 'knight';
+    this.curse = Math.max(0, data?.curse ?? 0);
     // reset transient per-run flags (the scene instance is reused on retry)
     this.pendingLevelUps = 0;
     this.showingLevelUp = false;
@@ -183,6 +191,13 @@ export class GameScene extends Phaser.Scene {
       kills: 0,
       gold: 0,
       ownedItems: new Map(),
+      rerollsLeft: 0,
+      curse: this.curse,
+      eventGoldMult: 1,
+      eventXpMult: 1,
+      eventSpawnRate: 1,
+      eventCapBonus: 0,
+      damageByWeapon: new Map(),
       gameOver: false,
       victory: false,
     };
@@ -234,6 +249,7 @@ export class GameScene extends Phaser.Scene {
     this.ctx.upgradeSystem = new UpgradeSystem(this.ctx);
     this.ctx.weaponSystem = new WeaponSystem(this.ctx);
     this.spawner = new EnemySpawner(this.ctx);
+    this.runEvents = new RunEvents(this.ctx, this.spawner);
 
     // 10) Grant the starting weapon.
     this.ctx.weaponSystem.addWeapon(this.character.startingWeaponId);
@@ -241,6 +257,18 @@ export class GameScene extends Phaser.Scene {
     // 11) Finalise stats then sync the player's hp to the computed maxHp.
     this.ctx.recomputeStats();
     this.player.hp = this.player.maxHp = this.stats.maxHp;
+
+    // 11.5) Run-start meta effects. Reroll charges are a per-run pool seeded
+    //       from the Mirror of Fate power-up; Head Start (a one-shot shop
+    //       consumable) is consumed here and starts the run at level 2 — the
+    //       owed level-up screen is queued in step 15, after the UIScene has
+    //       subscribed to LEVEL_UP.
+    this.run.rerollsLeft = this.stats.rerolls;
+    const headstart = MetaState.consumeConsumable('headstart');
+    if (headstart) {
+      this.run.level = 2;
+      this.run.xpToNext = xpForLevel(this.run.level);
+    }
 
     // 12) Overlaps. WeaponSystem registers projectile↔enemy itself.
     this.physics.add.overlap(
@@ -269,11 +297,15 @@ export class GameScene extends Phaser.Scene {
       (p: { option: UpgradeOption }) => this.onUpgradeChosen(p.option),
       this
     );
+    this.events.on(EVENTS.REROLL_REQUESTED, this.onRerollRequested, this);
 
     // 15) Emit the initial HUD state on the next tick so the just-launched
     //     UIScene has had a chance to subscribe. (UIScene also pulls a
     //     snapshot via getHudSnapshot() in its own create.)
-    this.time.delayedCall(0, () => this.emitInitialHud());
+    this.time.delayedCall(0, () => {
+      this.emitInitialHud();
+      if (headstart) this.queueLevelUp();
+    });
 
     // Clean up cross-scene listeners when this scene shuts down (retry/quit).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
@@ -298,15 +330,18 @@ export class GameScene extends Phaser.Scene {
     this.bg.tilePositionX = view.x;
     this.bg.tilePositionY = view.y;
 
-    // Emit the run timer ~4x/sec (HUD mm:ss only needs this granularity).
+    // Emit the run timer ~4x/sec (HUD mm:ss only needs this granularity); the
+    // chest compass shares the same cadence.
     if (run.elapsedMs - this.lastTimerEmit >= 250) {
       this.lastTimerEmit = run.elapsedMs;
       this.events.emit(EVENTS.TIMER, { elapsedMs: run.elapsedMs });
+      this.emitChestDir();
     }
 
     // Drive the systems. Entities self-update via their own preUpdate.
     this.ctx.weaponSystem.update(time, delta);
     this.spawner.update(time, delta);
+    this.runEvents.update(delta);
 
     // Death poll (player.isAlive is flipped inside Player.takeDamage).
     if (!this.player.isAlive) {
@@ -369,13 +404,19 @@ export class GameScene extends Phaser.Scene {
   private damageEnemy(
     enemy: EnemySprite,
     amount: number,
-    opts?: { knockback?: number; crit?: boolean }
+    opts?: { knockback?: number; crit?: boolean; sourceId?: string }
   ): void {
     // Guard: the enemy may have died from an earlier hit this frame.
     if (!enemy || !enemy.active) return;
 
     const crit = opts?.crit ?? this.ctx.rng.frac() < this.stats.critChance;
     const final = Math.round(amount * (crit ? this.stats.critMult : 1));
+
+    // Per-weapon damage attribution for the end-of-run stats.
+    if (opts?.sourceId) {
+      const tally = this.run.damageByWeapon;
+      tally.set(opts.sourceId, (tally.get(opts.sourceId) ?? 0) + final);
+    }
 
     // Knockback originates from the player by default (the most common case;
     // projectiles pass their own position via takeDamage's `from`).
@@ -407,9 +448,10 @@ export class GameScene extends Phaser.Scene {
     return p;
   }
 
-  /** gold = round(n * greed); emit the counter change. */
+  /** gold = round(n × greed × gold-rush × curse bonus); emit the change. */
   private addGold(amount: number): void {
-    this.run.gold += Math.round(amount * this.stats.greed);
+    const mult = this.stats.greed * this.run.eventGoldMult * curseMults(this.run.curse).gold;
+    this.run.gold += Math.round(amount * mult);
     this.events.emit(EVENTS.GOLD_CHANGED, { gold: this.run.gold });
   }
 
@@ -434,6 +476,34 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(durationMs ?? 150, intensity ?? 0.005);
   }
 
+  /**
+   * Chest compass: find the nearest active chest and, when it is OFF screen,
+   * tell the HUD which way to point. Runs on the throttled timer cadence.
+   */
+  private emitChestDir(): void {
+    let best: Pickup | null = null;
+    let bestD2 = Number.POSITIVE_INFINITY;
+    const children = this.pickups.getChildren();
+    for (let i = 0; i < children.length; i++) {
+      const pk = children[i] as Pickup;
+      if (!pk.active || pk.pickupType !== 'chest') continue;
+      const dx = pk.x - this.player.x;
+      const dy = pk.y - this.player.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = pk;
+      }
+    }
+
+    if (!best || this.cameras.main.worldView.contains(best.x, best.y)) {
+      this.events.emit(EVENTS.CHEST_DIR, { active: false, angle: 0 });
+      return;
+    }
+    const angle = Math.atan2(best.y - this.player.y, best.x - this.player.x);
+    this.events.emit(EVENTS.CHEST_DIR, { active: true, angle });
+  }
+
   /* ------------------------------------------------------------------ */
   /* Floating combat text (pooled)                                      */
   /* ------------------------------------------------------------------ */
@@ -442,7 +512,7 @@ export class GameScene extends Phaser.Scene {
     let t = this.popPool.pop();
     if (!t) {
       t = this.add.text(0, 0, '', {
-        fontFamily: '"Press Start 2P", monospace',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '10px',
         color: '#ffffff',
         stroke: '#000000',
@@ -503,7 +573,11 @@ export class GameScene extends Phaser.Scene {
   private showNextLevelUp(): void {
     this.showingLevelUp = true;
     const options = this.ctx.upgradeSystem.rollOptions(RUN.LEVELUP_CHOICES);
-    this.events.emit(EVENTS.LEVEL_UP, { level: this.run.level, options });
+    this.events.emit(EVENTS.LEVEL_UP, {
+      level: this.run.level,
+      options,
+      rerollsLeft: this.run.rerollsLeft,
+    });
 
     // Golden flash for the "time freeze" beat (the overlay also dims the screen
     // and shows its own golden glow).
@@ -511,6 +585,21 @@ export class GameScene extends Phaser.Scene {
 
     // Pause only THIS scene; the UI scene stays live to handle the choice.
     this.scene.pause();
+  }
+
+  /**
+   * UI -> game: spend a reroll charge. Re-rolls the current screen's options
+   * and re-emits LEVEL_UP (the overlay rebuilds its cards synchronously).
+   */
+  private onRerollRequested(): void {
+    if (!this.showingLevelUp || this.run.rerollsLeft <= 0) return;
+    this.run.rerollsLeft--;
+    const options = this.ctx.upgradeSystem.rollOptions(RUN.LEVELUP_CHOICES);
+    this.events.emit(EVENTS.LEVEL_UP, {
+      level: this.run.level,
+      options,
+      rerollsLeft: this.run.rerollsLeft,
+    });
   }
 
   /** UI -> game: a card was chosen. Apply it, then resume or chain. */
@@ -599,6 +688,14 @@ export class GameScene extends Phaser.Scene {
     }));
     const items: OwnedItemView[] = this.ctx.upgradeSystem.getItemViews();
 
+    // Per-weapon damage chart data, largest first.
+    const weaponDamage: WeaponDamageView[] = [];
+    this.run.damageByWeapon.forEach((total, id) => {
+      const def = WEAPONS[id];
+      if (def) weaponDamage.push({ id, name: def.name, icon: def.icon, total: Math.round(total) });
+    });
+    weaponDamage.sort((a, b) => b.total - a.total);
+
     const summary: RunSummary = {
       characterId: this.run.characterId,
       timeMs: this.run.elapsedMs,
@@ -606,9 +703,14 @@ export class GameScene extends Phaser.Scene {
       kills: this.run.kills,
       gold: this.run.gold,
       victory,
+      curse: this.run.curse,
       weapons,
       items,
+      weaponDamage,
     };
+
+    // A victory raises the curse-contract unlock ceiling.
+    if (victory) MetaState.recordVictory(this.run.curse);
 
     // Best-time persistence AND "new best" detection are owned by GameOverScene
     // (it must compare against the PRIOR record before overwriting it).
@@ -686,6 +788,7 @@ export class GameScene extends Phaser.Scene {
   private onShutdown(): void {
     // Drop cross-scene listeners + pooled text so a retry starts clean.
     this.events.off(EVENTS.UPGRADE_CHOSEN);
+    this.events.off(EVENTS.REROLL_REQUESTED);
     this.popPool.length = 0;
   }
 }

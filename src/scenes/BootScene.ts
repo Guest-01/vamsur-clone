@@ -19,7 +19,7 @@ export class BootScene extends Phaser.Scene {
     const cy = height / 2;
 
     this.add.text(cx, cy - 40, '영원한 밤의 묘지', {
-      fontFamily: 'Cinzel, serif',
+      fontFamily: 'Cinzel, "Noto Serif KR", serif',
       fontSize: '28px',
       color: '#c9a24b',
     }).setOrigin(0.5);

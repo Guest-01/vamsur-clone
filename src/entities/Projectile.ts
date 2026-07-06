@@ -37,6 +37,8 @@ export interface ProjectileOpts {
   tint?: number;
   /** pre-rolled crit flag forwarded to damageEnemy (undefined → rolled there) */
   crit?: boolean;
+  /** owning weapon id, forwarded to damageEnemy for the per-weapon damage stats */
+  sourceId?: string;
   /**
    * Lobbed (axe) arc parameters. When present the projectile fakes gravity by
    * applying a downward acceleration to its velocity each frame so it arcs up
@@ -63,6 +65,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   private damage = 0;
   private knockback = 0;
   private crit: boolean | undefined;
+  private sourceId: string | undefined;
   /** spin rate in rad/s (0 = none) */
   private spin = 0;
   /** fake-gravity acceleration for lobbed shots (0 = straight flight) */
@@ -122,6 +125,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.pierce = opts.pierce;
     this.knockback = opts.knockback;
     this.crit = opts.crit;
+    this.sourceId = opts.sourceId;
     this.life = opts.life;
     this.hitSet.clear();
   }
@@ -159,6 +163,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.ctx.damageEnemy(enemy, this.damage, {
       knockback: this.knockback,
       crit: this.crit,
+      sourceId: this.sourceId,
     });
 
     this.pierce--;

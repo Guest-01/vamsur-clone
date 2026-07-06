@@ -127,6 +127,23 @@ export const ENEMIES: Record<string, EnemyDef> = {
     isBoss: true,
   },
 
+  // event-only: the Ghost Parade (systems/RunEvents) marches these across the
+  // arena — never in the wave tables. Fragile, quick, generous with coins.
+  wisp: {
+    id: 'wisp',
+    name: 'Wisp',
+    frame: FRAMES.ZOMBIE,
+    tint: 0xbfe8ff,
+    baseHp: 12,
+    contactDamage: 8,
+    moveSpeed: 118,
+    xp: 4,
+    goldChance: 0.3,
+    scale: 0.95,
+    behavior: 'chase',
+    knockbackResist: 0,
+  },
+
   // --- expansion: tinted/rescaled variants reusing chase / wander-chase ---
   wraith: {
     id: 'wraith',

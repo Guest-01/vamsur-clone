@@ -69,7 +69,7 @@ export class PauseOverlay {
     // "PAUSED" heading
     this.title = scene.add
       .text(cx, cy - panelH / 2 + 88, 'PAUSED', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '80px',
         color: '#e8e0d0',
@@ -179,7 +179,7 @@ export class PauseOverlay {
     const statLine = `시간 ${mmss}    레벨 ${s.level}    처치 ${s.kills}    골드 ${s.gold}`;
     const stats = scene.add
       .text(cx, statsY, statLine, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '26px',
         color: '#c9a24b',
@@ -190,7 +190,7 @@ export class PauseOverlay {
 
     const hpLine = scene.add
       .text(cx, statsY + 38, `HP  ${Math.ceil(s.hp)} / ${Math.round(s.maxHp)}`, {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '20px',
         color: '#e24b58',
       })
@@ -210,7 +210,7 @@ export class PauseOverlay {
       body.add(
         scene.add
           .text(left, iLabelY + 52, '없음', {
-            fontFamily: 'Cinzel, serif',
+            fontFamily: 'Cinzel, "Noto Serif KR", serif',
             fontSize: '28px',
             color: '#9a8f78',
           })
@@ -225,7 +225,7 @@ export class PauseOverlay {
   private sectionLabel(x: number, y: number, text: string): Phaser.GameObjects.Text {
     return this.scene.add
       .text(x, y, text, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '32px',
         color: '#d8c9a0',
@@ -264,7 +264,7 @@ export class PauseOverlay {
       const lvlLabel = maxed ? 'MAX' : `${v.level}`;
       const lvl = this.scene.add
         .text(0, 0, lvlLabel, {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: '"Press Start 2P", Galmuri11, monospace',
           fontSize: maxed ? '15px' : '18px',
           color: maxed ? '#f0d896' : '#e8e0d0',
         })
@@ -319,7 +319,7 @@ export class PauseOverlay {
 
     const txt = scene.add
       .text(0, 0, label, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '36px',
         color: '#e8e0d0',

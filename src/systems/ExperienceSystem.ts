@@ -9,7 +9,7 @@
 import Phaser from 'phaser';
 import type { GameContext, IExperienceSystem } from '../types';
 import { EVENTS } from '../types';
-import { xpForLevel } from '../config/balance';
+import { curseMults, xpForLevel } from '../config/balance';
 
 export class ExperienceSystem implements IExperienceSystem {
   private ctx: GameContext;
@@ -38,7 +38,8 @@ export class ExperienceSystem implements IExperienceSystem {
     const run = this.ctx.run;
     const stats = this.ctx.stats;
 
-    run.xp += amount * stats.xpGain;
+    // stat multiplier × timed-event bonus (blood moon) × curse-contract bonus
+    run.xp += amount * stats.xpGain * run.eventXpMult * curseMults(run.curse).xp;
 
     while (run.xp >= run.xpToNext) {
       run.xp -= run.xpToNext;

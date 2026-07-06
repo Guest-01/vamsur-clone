@@ -11,6 +11,13 @@ function hex(c: number): string {
   return '#' + c.toString(16).padStart(6, '0');
 }
 
+/** Compact damage total for the per-weapon chart ("12.4k", "1.2M"). */
+function fmtDamage(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return `${n}`;
+}
+
 /**
  * GameOverScene — the end-of-run results screen.
  *
@@ -104,7 +111,7 @@ export class GameOverScene extends Phaser.Scene {
 
     const headline = this.add
       .text(W / 2, top + 36, title, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '92px',
         color: hex(color),
@@ -135,13 +142,26 @@ export class GameOverScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, top + 100, victory ? '영원한 밤을 견뎌냈다' : '어둠에 삼켜졌다', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontSize: '28px',
         color: hex(COLORS.PARCHMENT),
       })
       .setOrigin(0.5)
       .setDepth(DEPTH.POPTEXT)
       .setAlpha(0.85);
+
+    // curse-contract badge (hard-mode runs only)
+    if (this.summary.curse > 0) {
+      this.add
+        .text(W / 2, top + 140, `☠ 저주 계약 ${this.summary.curse}단계`, {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
+          fontStyle: '700',
+          fontSize: '24px',
+          color: '#b066ff',
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH.POPTEXT);
+    }
   }
 
   /* ---------------------------- stats ----------------------------- */
@@ -153,7 +173,7 @@ export class GameOverScene extends Phaser.Scene {
     const timeColor = this.newBest ? COLORS.GOLD_LIGHT : COLORS.BONE;
     const timeLabel = this.add
       .text(W / 2, cy, formatTime(s.timeMs), {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '52px',
         color: hex(timeColor),
       })
@@ -163,7 +183,7 @@ export class GameOverScene extends Phaser.Scene {
     if (this.newBest) {
       const tag = this.add
         .text(W / 2, cy + 48, '★ 신기록 ★', {
-          fontFamily: 'Cinzel, serif',
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
           fontStyle: '700',
           fontSize: '26px',
           color: hex(COLORS.GOLD),
@@ -192,7 +212,7 @@ export class GameOverScene extends Phaser.Scene {
       const x = W / 2 + (i - 1) * spread;
       this.add
         .text(x, row, c.label, {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: '"Press Start 2P", Galmuri11, monospace',
           fontSize: '18px',
           color: hex(COLORS.TEXT_DIM),
         })
@@ -200,7 +220,7 @@ export class GameOverScene extends Phaser.Scene {
         .setDepth(DEPTH.POPTEXT);
       this.add
         .text(x, row + 44, c.value, {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: '"Press Start 2P", Galmuri11, monospace',
           fontSize: '32px',
           color: hex(c.color),
         })
@@ -216,7 +236,7 @@ export class GameOverScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, cy - 36, '획득한 장비', {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
         color: hex(COLORS.TEXT_DIM),
@@ -234,6 +254,10 @@ export class GameOverScene extends Phaser.Scene {
     const rowW = perRow * slot + (perRow - 1) * gap;
     const startX = W / 2 - rowW / 2 + slot / 2;
     const rowY = cy + 32;
+
+    // per-weapon damage lookup for the mini bar chart under weapon slots
+    const dmgById = new Map(s.weaponDamage.map((d) => [d.id, d.total]));
+    const maxDmg = s.weaponDamage.length > 0 ? s.weaponDamage[0].total : 0;
 
     entries.forEach((e, i) => {
       const col = i % perRow;
@@ -254,7 +278,7 @@ export class GameOverScene extends Phaser.Scene {
       const pipLabel = `${e.level}/${e.maxLevel}`;
       const pipText = this.add
         .text(0, 0, pipLabel, {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: '"Press Start 2P", Galmuri11, monospace',
           fontSize: '16px',
           color: e.level >= e.maxLevel ? hex(COLORS.GOLD_LIGHT) : hex(COLORS.BONE),
         })
@@ -269,6 +293,31 @@ export class GameOverScene extends Phaser.Scene {
         .setOrigin(1, 1)
         .setDepth(DEPTH.POPTEXT);
       pipText.setPosition(chipX - 5, chipY - 2);
+
+      // weapons (always the leading entries) get a total-damage bar + number,
+      // scaled against the run's top damage dealer.
+      if (i < s.weapons.length && maxDmg > 0) {
+        const total = dmgById.get(e.id) ?? 0;
+        const frac = Phaser.Math.Clamp(total / maxDmg, 0, 1);
+        const barW = slot - 8;
+        const barY = y + slot / 2 + 12;
+        this.add
+          .rectangle(x, barY, barW, 8, 0x0a0a12, 0.9)
+          .setStrokeStyle(1, COLORS.PANEL_BORDER)
+          .setDepth(DEPTH.POPTEXT);
+        this.add
+          .rectangle(x - barW / 2, barY, Math.max(2, barW * frac), 8, COLORS.GOLD, 1)
+          .setOrigin(0, 0.5)
+          .setDepth(DEPTH.POPTEXT + 1);
+        this.add
+          .text(x, barY + 20, fmtDamage(total), {
+            fontFamily: '"Press Start 2P", Galmuri11, monospace',
+            fontSize: '13px',
+            color: hex(COLORS.TEXT_DIM),
+          })
+          .setOrigin(0.5)
+          .setDepth(DEPTH.POPTEXT);
+      }
     });
   }
 
@@ -291,7 +340,9 @@ export class GameOverScene extends Phaser.Scene {
   private buildButtons(W: number, s: RunSummary): void {
     const by = GAME.HEIGHT / 2 + 316;
     this.makeButton(W / 2 - 192, by, '다시 도전', COLORS.GOLD, () => {
-      this.transition(() => this.scene.start(SCENES.GAME, { characterId: s.characterId }));
+      this.transition(() =>
+        this.scene.start(SCENES.GAME, { characterId: s.characterId, curse: s.curse })
+      );
     });
     this.makeButton(W / 2 + 192, by, '메뉴로', COLORS.PANEL_BORDER, () => {
       this.transition(() => this.scene.start(SCENES.MENU));
@@ -316,7 +367,7 @@ export class GameOverScene extends Phaser.Scene {
 
     const txt = this.add
       .text(x, y, label, {
-        fontFamily: 'Cinzel, serif',
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '34px',
         color: hex(COLORS.BONE),
@@ -344,9 +395,14 @@ export class GameOverScene extends Phaser.Scene {
   private bindInput(): void {
     const kb = this.input.keyboard;
     if (!kb) return;
-    // ENTER = retry
+    // ENTER = retry (same character AND same curse level)
     kb.on('keydown-ENTER', () => {
-      this.transition(() => this.scene.start(SCENES.GAME, { characterId: this.summary.characterId }));
+      this.transition(() =>
+        this.scene.start(SCENES.GAME, {
+          characterId: this.summary.characterId,
+          curse: this.summary.curse,
+        })
+      );
     });
     // ESC = back to menu
     kb.on('keydown-ESC', () => {

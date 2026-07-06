@@ -20,7 +20,9 @@ import {
   COLORS,
   DEPTH,
   ENTITY_SCALE,
+  PICKUP,
   SPAWN,
+  curseMults,
   damageScale,
   hpScale,
   speedScale,
@@ -100,11 +102,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     const r = (this.width / 2) * 0.7;
     this.setCircle(r, this.width / 2 - r, this.height / 2 - r);
 
-    // time-scaled combat stats
+    // time-scaled combat stats (× the run's curse-contract multipliers)
     const elapsed = ctx.run.elapsedMs;
-    this.maxHp = def.baseHp * hpScale(elapsed);
+    const curse = curseMults(ctx.run.curse);
+    this.maxHp = def.baseHp * hpScale(elapsed) * curse.enemyHp;
     this.hp = this.maxHp;
-    this.contactDamage = def.contactDamage * damageScale(elapsed);
+    this.contactDamage = def.contactDamage * damageScale(elapsed) * curse.enemyDmg;
     this.speed = def.moveSpeed * speedScale(elapsed);
 
     // reset transient state
@@ -259,8 +262,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     ctx.spawnXpGem(x, y, def.xp);
 
     if (ctx.rng.frac() < def.goldChance) ctx.spawnPickup(x, y, 'gold');
-    // elites & bosses always cough up a treasure chest.
+    // Rare support drops (offset so they don't stack on the xp gem).
+    if (ctx.rng.frac() < PICKUP.HEALTH_DROP) ctx.spawnPickup(x + 14, y, 'health');
+    else if (ctx.rng.frac() < PICKUP.MAGNET_DROP) ctx.spawnPickup(x + 14, y, 'magnet');
+    // elites & bosses always cough up a treasure chest (+ a potion for elites).
     if (def.isElite || def.isBoss) ctx.spawnPickup(x, y, 'chest');
+    if (def.isElite) ctx.spawnPickup(x - 18, y, 'health');
 
     this.emitDeathPoof(x, y, def.isBoss === true);
 

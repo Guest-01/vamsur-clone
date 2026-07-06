@@ -57,6 +57,8 @@ export const TEXTURES = {
   ICON_ECHO: 'gen-ic-echo', // projectile amount
   ICON_CLOAK: 'gen-ic-cloak', // dodge
   ICON_LEAF: 'gen-ic-leaf', // hp regen
+  ICON_COIN: 'gen-ic-coin', // gold coin (sheet frame 82 reads as a barrel)
+  ICON_MIRROR: 'gen-ic-mirror', // hand mirror (Mirror of Fate)
 } as const;
 
 /** Named frame indices into the tiny-dungeon spritesheet. */
@@ -97,7 +99,7 @@ export const FRAMES = {
   BOTTLE: 113,
   SHIELD: 102,
   COINS: 82,
-  CHEST: 41,
+  CHEST: 89, // closed treasure chest (41 was a wall-alcove tile, not a chest)
 } as const;
 
 export type FrameName = keyof typeof FRAMES;

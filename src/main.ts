@@ -4,6 +4,13 @@ import Phaser from 'phaser';
 import '@fontsource/press-start-2p';
 import '@fontsource/cinzel/400.css';
 import '@fontsource/cinzel/700.css';
+// Korean glyphs (both SIL OFL): Noto Serif KR pairs with Cinzel for display
+// text; Galmuri11 pairs with Press Start 2P for pixel text. Galmuri is
+// registered manually from the single woff2 we use — importing the package
+// css would bundle every face (plus ttf fallbacks) into the build.
+import '@fontsource/noto-serif-kr/400.css';
+import '@fontsource/noto-serif-kr/700.css';
+import galmuri11Url from 'galmuri/dist/Galmuri11.woff2';
 
 import { GAME } from './config/balance';
 import { BootScene } from './scenes/BootScene';
@@ -36,10 +43,16 @@ function designWidth(): number {
 async function waitForFonts(): Promise<void> {
   if (!('fonts' in document)) return;
   try {
+    // Register the Galmuri11 face from its bundled woff2 (see imports above).
+    const galmuri = new FontFace('Galmuri11', `url(${galmuri11Url}) format('woff2')`);
+    (document as any).fonts.add(await galmuri.load());
     await Promise.all([
       (document as any).fonts.load('16px "Press Start 2P"'),
       (document as any).fonts.load('16px "Cinzel"'),
       (document as any).fonts.load('700 16px "Cinzel"'),
+      // A Korean sample string pulls in the right unicode-range subsets.
+      (document as any).fonts.load('16px "Noto Serif KR"', '가나다'),
+      (document as any).fonts.load('700 16px "Noto Serif KR"', '가나다'),
     ]);
     await (document as any).fonts.ready;
   } catch {

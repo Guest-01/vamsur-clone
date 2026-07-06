@@ -87,6 +87,7 @@ export const DEFAULT_STATS: PlayerStats = {
   revives: 0,
   dodge: 0,
   greed: 1,
+  rerolls: 0,
 };
 
 /** Clamp helpers used when applying stats. */
@@ -148,6 +149,9 @@ export const PICKUP = {
   GOLD_VALUE: 4,
   /** chest grants this many upgrade rolls */
   CHEST_ROLLS: 1,
+  /** per-kill chance to drop a health potion / a vacuum magnet */
+  HEALTH_DROP: 0.008,
+  MAGNET_DROP: 0.0015,
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -170,6 +174,34 @@ export function damageScale(elapsedMs: number): number {
 export function speedScale(elapsedMs: number): number {
   const min = elapsedMs / 60000;
   return 1 + min * 0.04;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hard mode — the Curse Contract                                      */
+/* ------------------------------------------------------------------ */
+
+/** Highest selectable curse level. */
+export const MAX_CURSE = 5;
+
+/**
+ * Per-run multipliers for the chosen curse level (0 = base game). Unlocked one
+ * level at a time: beating curse N unlocks N+1 (see MetaState.maxCurseCleared).
+ */
+export function curseMults(level: number): {
+  enemyHp: number;
+  enemyDmg: number;
+  cap: number;
+  gold: number;
+  xp: number;
+} {
+  const c = Math.max(0, level);
+  return {
+    enemyHp: 1 + 0.2 * c,
+    enemyDmg: 1 + 0.1 * c,
+    cap: 1 + 0.1 * c,
+    gold: 1 + 0.25 * c,
+    xp: 1 + 0.15 * c,
+  };
 }
 
 /* ------------------------------------------------------------------ */

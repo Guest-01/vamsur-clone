@@ -244,7 +244,7 @@ export class UpgradeSystem implements IUpgradeSystem {
       kind: 'gold',
       name: 'Cursed Gold',
       description: `${goldAmount} 골드를 획득한다.`,
-      icon: { texture: TEXTURES.SPRITES, frame: FRAMES.COINS },
+      icon: { texture: TEXTURES.ICON_COIN, frame: -1 },
       level: goldAmount,
       maxLevel: 1,
       isWeapon: false,

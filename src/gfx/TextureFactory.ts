@@ -443,6 +443,35 @@ export class TextureFactory {
       g.fillStyle(0x0a0a12, 1).fillEllipse(24, 20, 16, 14); // hood shadow
       g.fillStyle(0xffffff, 0.18).fillCircle(15, 13, 3);
     });
+    // COIN (gold) — bold gold disc with a stamped inner rim + glint. Replaces
+    // the sheet's "coins" frame, which read as a barrel at small sizes.
+    mk(TEXTURES.ICON_COIN, (g) => {
+      g.fillStyle(0x7a5c18, 1).fillCircle(25, 26, 17); // bottom-edge shadow
+      g.fillStyle(COLORS.GOLD, 1).fillCircle(24, 24, 17);
+      g.fillStyle(COLORS.GOLD_LIGHT, 1).fillCircle(24, 24, 11);
+      g.lineStyle(2, 0x8a6a1e, 1).strokeCircle(24, 24, 11); // stamped rim
+      // centre diamond stamp
+      g.fillStyle(COLORS.GOLD, 1).fillPoints(
+        [
+          new Phaser.Math.Vector2(24, 18),
+          new Phaser.Math.Vector2(30, 24),
+          new Phaser.Math.Vector2(24, 30),
+          new Phaser.Math.Vector2(18, 24),
+        ],
+        true
+      );
+      g.fillStyle(0xffffff, 0.6).fillCircle(17, 16, 3); // glint
+    });
+    // MIRROR (fate) — gold hand mirror with a pale glass + diagonal glint
+    mk(TEXTURES.ICON_MIRROR, (g) => {
+      g.fillStyle(0x8a6a1e, 1).fillRoundedRect(21, 30, 6, 15, 3); // handle
+      g.fillStyle(COLORS.GOLD, 1).fillCircle(24, 19, 14); // frame
+      g.fillStyle(0x8fc8ea, 1).fillCircle(24, 19, 10); // glass
+      g.fillStyle(0x5c93b8, 1).fillCircle(26, 21, 7); // glass depth
+      g.lineStyle(3, 0xffffff, 0.75);
+      g.lineBetween(19, 24, 28, 13); // glint stripe
+      g.fillStyle(0xffffff, 0.85).fillCircle(20, 14, 2);
+    });
     // LEAF (hp regen) — sprouting leaf with a stem
     mk(TEXTURES.ICON_LEAF, (g) => {
       g.fillStyle(0x49b04a, 1);

@@ -21,7 +21,7 @@ const gen = (texture: string) => ({ texture, frame: -1 });
 export const WEAPONS: Record<string, WeaponDef> = {
   whip: {
     id: 'whip',
-    name: 'Whip',
+    name: '채찍',
     description: '정면(고레벨엔 양옆)을 후려치는 근접 무기.',
     behavior: 'whip',
     icon: sheet(FRAMES.WHIP),
@@ -49,7 +49,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   wand: {
     id: 'wand',
-    name: 'Arcane Bolt',
+    name: '마력탄',
     description: '가장 가까운 적을 자동으로 추격하는 마법탄.',
     behavior: 'projectile-nearest',
     icon: sheet(FRAMES.WAND_BLUE),
@@ -77,7 +77,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   knife: {
     id: 'knife',
-    name: 'Throwing Knife',
+    name: '투척 단검',
     description: '바라보는 방향으로 빠르게 던지는 단검.',
     behavior: 'projectile-facing',
     icon: sheet(FRAMES.DAGGER),
@@ -105,7 +105,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   axe: {
     id: 'axe',
-    name: 'Throwing Axe',
+    name: '투척 도끼',
     description: '높이 던져 호를 그리며 떨어지는 강력한 도끼.',
     behavior: 'lobbed',
     icon: sheet(FRAMES.AXE),
@@ -133,7 +133,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   sanctuary: {
     id: 'sanctuary',
-    name: 'Holy Aura',
+    name: '성역',
     description: '주위를 감싸는 신성한 장막. 닿는 적에게 지속 피해.',
     behavior: 'aura',
     icon: sheet(FRAMES.POTION_BLUE),
@@ -161,7 +161,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   orbit: {
     id: 'orbit',
-    name: 'Spirit Orbs',
+    name: '수호 영혼',
     description: '플레이어 주위를 도는 수호 영혼. 닿는 적에게 피해.',
     behavior: 'orbit',
     icon: gen(TEXTURES.ORB),
@@ -189,7 +189,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   greatsword: {
     id: 'greatsword',
-    name: 'Whirlblade',
+    name: '선풍검',
     description: '주위를 빙 둘러 휩쓰는 회전 베기. 포위됐을 때 강력하다.',
     behavior: 'spin',
     icon: sheet(FRAMES.SWORD),
@@ -218,7 +218,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   spear: {
     id: 'spear',
-    name: 'Spear',
+    name: '장창',
     description: '정면으로 길게 꿰뚫는 창. 높은 관통.',
     behavior: 'projectile-facing',
     icon: sheet(FRAMES.SWORD_GOLD),
@@ -247,7 +247,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   runebolt: {
     id: 'runebolt',
-    name: 'Rune Bolt',
+    name: '룬 마탄',
     description: '느리지만 강력하고 잘 관통하는 룬 마법탄.',
     behavior: 'projectile-nearest',
     icon: sheet(FRAMES.WAND_PINK),
@@ -276,7 +276,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 
   miasma: {
     id: 'miasma',
-    name: 'Miasma',
+    name: '독무',
     description: '넓게 퍼지는 독성 장막. 닿는 적에게 지속 피해.',
     behavior: 'aura',
     icon: sheet(FRAMES.POTION_GREEN),

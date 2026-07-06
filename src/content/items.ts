@@ -12,7 +12,7 @@ const gen = (texture: string) => ({ texture, frame: -1 });
 export const ITEMS: Record<string, ItemDef> = {
   hollowHeart: {
     id: 'hollowHeart',
-    name: 'Lifestone',
+    name: '생명석',
     description: '최대 체력을 늘린다.',
     icon: gen(TEXTURES.ICON_HEART),
     maxLevel: 5,
@@ -24,7 +24,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   spinach: {
     id: 'spinach',
-    name: 'Bloodlust',
+    name: '피의 갈망',
     description: '모든 피해량이 증가한다.',
     icon: gen(TEXTURES.ICON_FIST),
     maxLevel: 5,
@@ -36,7 +36,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   boots: {
     id: 'boots',
-    name: 'Swift Boots',
+    name: '질풍의 장화',
     description: '이동 속도가 빨라진다.',
     icon: gen(TEXTURES.ICON_BOOT),
     maxLevel: 5,
@@ -48,7 +48,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   tome: {
     id: 'tome',
-    name: 'Swift Codex',
+    name: '신속의 마도서',
     description: '무기 재사용 대기시간을 줄인다.',
     icon: gen(TEXTURES.ICON_HOURGLASS),
     maxLevel: 5,
@@ -60,7 +60,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   candelabra: {
     id: 'candelabra',
-    name: 'Brazier',
+    name: '화로',
     description: '무기 효과 범위가 넓어진다.',
     icon: gen(TEXTURES.ICON_STAR),
     maxLevel: 5,
@@ -72,7 +72,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   duplicator: {
     id: 'duplicator',
-    name: 'Echo Charm',
+    name: '메아리 부적',
     description: '투사체/효과 개수가 늘어난다.',
     icon: gen(TEXTURES.ICON_ECHO),
     maxLevel: 3,
@@ -84,7 +84,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   attractorb: {
     id: 'attractorb',
-    name: 'Lodestone',
+    name: '자철석',
     description: '경험치 흡수 범위가 넓어진다.',
     icon: gen(TEXTURES.ICON_MAGNET),
     maxLevel: 4,
@@ -96,7 +96,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   armor: {
     id: 'armor',
-    name: 'Plate Armor',
+    name: '판금 갑옷',
     description: '받는 피해를 줄인다.',
     icon: gen(TEXTURES.ICON_SHIELD),
     maxLevel: 5,
@@ -108,7 +108,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   clover: {
     id: 'clover',
-    name: 'Black Cat',
+    name: '검은 고양이',
     description: '행운이 올라 좋은 강화가 자주 나온다.',
     icon: gen(TEXTURES.ICON_CLOVER),
     maxLevel: 5,
@@ -120,7 +120,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   wings: {
     id: 'wings',
-    name: 'Falcon Plume',
+    name: '매의 깃털',
     description: '투사체 속도가 빨라진다.',
     icon: gen(TEXTURES.ICON_WING),
     maxLevel: 5,
@@ -132,7 +132,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   pummarola: {
     id: 'pummarola',
-    name: 'Heartroot',
+    name: '생명의 뿌리',
     description: '체력이 서서히 회복된다.',
     icon: gen(TEXTURES.ICON_LEAF),
     maxLevel: 5,
@@ -144,7 +144,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   hawkeye: {
     id: 'hawkeye',
-    name: 'Hawk Eye',
+    name: '매의 눈',
     description: '치명타 확률이 오른다.',
     icon: sheet(FRAMES.SWORD_RED),
     maxLevel: 5,
@@ -156,7 +156,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   cruelEdge: {
     id: 'cruelEdge',
-    name: 'Cruel Edge',
+    name: '잔혹한 칼날',
     description: '치명타 피해가 늘어난다.',
     icon: sheet(FRAMES.HAMMER),
     maxLevel: 4,
@@ -168,7 +168,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   phantomCloak: {
     id: 'phantomCloak',
-    name: 'Phantom Cloak',
+    name: '환영 망토',
     description: '확률적으로 피해를 회피한다.',
     icon: gen(TEXTURES.ICON_CLOAK),
     maxLevel: 5,
@@ -180,7 +180,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   phoenixFeather: {
     id: 'phoenixFeather',
-    name: 'Phoenix Feather',
+    name: '불사조 깃털',
     description: '쓰러져도 절반의 체력으로 되살아난다.',
     icon: sheet(FRAMES.SHIELD),
     maxLevel: 2,
@@ -192,7 +192,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   greedRing: {
     id: 'greedRing',
-    name: 'Greed Ring',
+    name: '탐욕의 반지',
     description: '골드 획득량이 늘어난다.',
     icon: sheet(FRAMES.COINS),
     maxLevel: 4,
@@ -204,7 +204,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   eternalCandle: {
     id: 'eternalCandle',
-    name: 'Eternal Candle',
+    name: '영원한 촛불',
     description: '무기 효과의 지속시간이 늘어난다.',
     icon: sheet(FRAMES.BOTTLE),
     maxLevel: 5,
@@ -216,7 +216,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   crown: {
     id: 'crown',
-    name: 'Halo of Wisdom',
+    name: '지혜의 후광',
     description: '경험치 획득량이 늘어난다.',
     icon: gen(TEXTURES.GEM_L),
     maxLevel: 5,
