@@ -8,8 +8,9 @@ const gen = (texture: string) => ({ texture, frame: -1 });
  * Weapon registry. Field meaning is per `behavior` (see ARCHITECTURE.md):
  *  - projectile-nearest / -facing: amount = projectiles/shot, speed = px/s,
  *    pierce = pass-throughs, durationMs = max lifetime, area = sprite scale.
- *  - whip: amount = slashes (>=2 hits both sides), area = width/size mult,
- *    durationMs = slash visual lifetime, pierce ignored (hits all in box).
+ *  - whip: amount = slashes (>=2 hits both sides), area = reach/size mult,
+ *    durationMs = slash visual lifetime, pierce ignored (hits all in the
+ *    wide/flat forward box — see slashSide in WeaponSystem).
  *  - lobbed: speed = initial throw velocity, durationMs = flight time, area =
  *    impact radius mult, pierce = enemies hit on landing.
  *  - aura: cooldownMs = damage tick interval, area = radius mult, persistent.
@@ -19,34 +20,42 @@ const gen = (texture: string) => ({ texture, frame: -1 });
  * Arrays are indexed by (level - 1) and have length === maxLevel.
  */
 export const WEAPONS: Record<string, WeaponDef> = {
+  // NOTE: internal id/behavior stay 'whip' (referenced by WeaponId, characters,
+  // MetaState, the WeaponSystem switch). Only the display name/icon/text below
+  // were re-themed from a whip to an instant crimson flash-strike ("일섬"), to
+  // match the horizontal snap-out fx in slashSide.
   whip: {
     id: 'whip',
-    name: '채찍',
-    description: '정면(고레벨엔 양옆)을 후려치는 근접 무기.',
+    name: '일섬',
+    description: '정면을 순식간에 베어내는 섬광 일격. 레벨2부터 양옆을 동시에 벤다.',
     behavior: 'whip',
-    icon: sheet(FRAMES.WHIP),
+    icon: sheet(FRAMES.SWORD_RED),
     maxLevel: 8,
     weight: 10,
-    damage: [10, 12, 14, 18, 22, 26, 31, 37],
-    cooldownMs: [1150, 1100, 1050, 1000, 950, 900, 870, 840],
-    // capped at 2 — the weapon only ever slashes the facing side plus the
-    // opposite side (see fireWhip in WeaponSystem); a 3rd value here would be
-    // dead data since nothing reads amount beyond the ">= 2" check.
-    amount: [1, 1, 2, 2, 2, 2, 2, 2],
+    // A directional melee weapon: it only threatens the facing side, so it pays
+    // for that blind spot with the highest per-target DPS of the melee weapons
+    // (cf. the omnidirectional greatsword/sanctuary). Retuned up from
+    // [10..37]/[1150..840] — see the balance review in git history.
+    damage: [15, 18, 22, 27, 33, 40, 48, 58],
+    cooldownMs: [1000, 960, 920, 880, 840, 800, 760, 720],
+    // amount reaches 2 at level 2 (both sides). Capped at 2 — fireWhip only ever
+    // slashes the facing side plus the opposite side, so a 3rd value would be
+    // dead data (nothing reads amount beyond the ">= 2" check).
+    amount: [1, 2, 2, 2, 2, 2, 2, 2],
     area: [1, 1.1, 1.1, 1.25, 1.4, 1.55, 1.7, 1.9],
     speed: [0, 0, 0, 0, 0, 0, 0, 0],
     pierce: [99, 99, 99, 99, 99, 99, 99, 99],
     durationMs: [170, 170, 170, 180, 180, 190, 200, 210],
     knockback: [110, 110, 120, 130, 140, 150, 160, 180],
     levelText: [
-      '정면 후려치기',
-      '피해 +2',
-      '양옆 동시 공격',
-      '피해 +4, 범위 ↑',
-      '피해 +4, 범위 ↑',
-      '쿨다운 ↓',
+      '정면 일섬',
+      '양옆 동시 일섬, 피해 ↑',
+      '피해 +4',
       '피해 +5, 범위 ↑',
-      '피해 대폭 ↑',
+      '피해 +6, 범위 ↑',
+      '피해 +7, 범위 ↑',
+      '피해 +8, 범위 ↑',
+      '피해 대폭 ↑, 범위 ↑',
     ],
   },
 

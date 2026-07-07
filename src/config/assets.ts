@@ -36,7 +36,8 @@ export const TEXTURES = {
   RING: 'gen-ring', // hollow ring (targeting / magnet pulse)
   BOLT: 'gen-bolt', // magic bolt projectile
   ORB: 'gen-orb', // orbiting orb
-  SLASH: 'gen-slash', // whip / melee slash arc
+  SLASH: 'gen-slash', // melee slash arc (greatsword cyclone blades)
+  LASH: 'gen-lash', // whip cord — long, thin, tapers from handle end to a fine tip
   SHADOW: 'gen-shadow', // soft ellipse drop-shadow under entities
   KNIFE: 'gen-knife', // thrown knife projectile (crisp)
   SPEAR: 'gen-spear', // thrown spear/lance projectile (crisp, longer than the knife)

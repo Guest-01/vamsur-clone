@@ -27,6 +27,7 @@ export class TextureFactory {
     this.bolt(scene);
     this.orb(scene);
     this.slash(scene);
+    this.lash(scene);
     this.shadow(scene);
     this.knife(scene);
     this.spear(scene);
@@ -212,6 +213,47 @@ export class TextureFactory {
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
+    });
+  }
+
+  /**
+   * Whip cord: a long, thin lash that is THICKEST at the base (the handle end,
+   * left) and tapers to a fine point at the tip (right). A monotonic taper —
+   * NOT a mid-swelling leaf/flame — so it reads as a whip cord, not a candle.
+   * Drawn white so runtime setTint colours it; additive blend gives it a glow.
+   */
+  private static lash(scene: Phaser.Scene): void {
+    const w = 220;
+    const h = 18;
+    this.canvasTex(scene, TEXTURES.LASH, w, h, (ctx) => {
+      const midY = h / 2;
+      const baseX = 3;
+      const tipX = w - 3;
+      const mid = (baseX + tipX) / 2;
+
+      // A tapered sliver: full thickness at the base, converging to the tip
+      // point. The control point sits at ~half thickness so the edges fall away
+      // smoothly with no bulge. Top and bottom mirror → vertically symmetric.
+      const cord = (halfBase: number, alpha: number): void => {
+        ctx.beginPath();
+        ctx.moveTo(baseX, midY - halfBase);
+        ctx.quadraticCurveTo(mid, midY - halfBase * 0.55, tipX, midY);
+        ctx.quadraticCurveTo(mid, midY + halfBase * 0.55, baseX, midY + halfBase);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.fill();
+      };
+      cord(midY - 1, 0.22); // faint outer halo
+      cord(midY - 4, 0.9); // crisp thin body
+
+      // bright hot filament down the centre
+      ctx.strokeStyle = 'rgba(255,252,240,0.95)';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(baseX + 5, midY);
+      ctx.lineTo(tipX - 4, midY);
+      ctx.stroke();
     });
   }
 

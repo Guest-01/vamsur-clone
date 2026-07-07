@@ -527,44 +527,89 @@ export class WeaponSystem implements IWeaponSystem {
   }
 
   /**
-   * Spawn a transient SLASH sprite on one side and immediately damage every
-   * enemy in the arc once. The slash crescent texture opens toward +x, so we
-   * flip X for left-side slashes.
+   * Flash a transient horizontal whip crack on one side and immediately damage
+   * every enemy in a LONG, FLAT forward box once. The thin cord snaps straight
+   * out along the facing side and flashes away — an INSTANT lash, no arc —
+   * punctuated by a small tip crack. `dir` is +1 (right) or -1 (left); a signed
+   * scaleX mirrors it to the left, keeping the cord's base on the player.
    */
   private slashSide(w: WeaponState, dir: number, area: number): void {
     const p = this.ctx.player;
-    // SLASH texture is 60×44; reach scales with area. Offset the hit centre out.
-    const reach = 70 * area;
-    const cx = p.x + dir * reach * 0.55;
-    const cy = p.y;
-    const hitRadius = reach * 0.7;
+    // Hit box geometry (all scale with area). reach is the base forward unit;
+    // the box is a long, flat swath: `frontLen` deep out front, `backLen`
+    // behind (point-blank forgiveness), and `halfH` tall on each side. Longer
+    // and flatter than a slash so it reads as a lash (cf. the LASH texture).
+    const reach = 85 * area;
+    const frontLen = reach * 1.7;
+    const backLen = reach * 0.15;
+    const halfH = reach * 0.4;
 
-    // Visual: short-lived additive crescent that tweens out.
-    const slash = this.scene.add.image(cx, cy, TEXTURES.SLASH);
-    slash.setDepth(DEPTH.FX);
-    slash.setBlendMode(Phaser.BlendModes.ADD);
-    slash.setTint(w.def.projectileTint ?? COLORS.GOLD_LIGHT);
-    // Mirror the left-side slash with a SIGNED scaleX (no flipX). Start and end
-    // share the same sign as `dir`, so the tween never crosses zero — that zero
-    // crossing (plus flipX) is what made the left slash collapse and look wrong.
-    slash.setScale(0.6 * area * dir, 0.9 * area);
-    slash.setAlpha(0.95);
+    // ---- Visual: an INSTANT horizontal whip crack — no arc. The thin cord snaps
+    // straight out along the facing side and flashes away. Origin (0, 0.5) pins
+    // the cord's base (handle end) to the player; a signed scaleX (= dir) mirrors
+    // it left without moving the base (the sign is fixed, so the snap-out tween
+    // never crosses zero). Bone-white so it reads as a bright lash, not a flame.
+    const lenScale = frontLen / 220; // LASH texture is 220px long
+    const thick = 0.7 + area * 0.35; // thin cord, a touch thicker at high area
+    const tint = w.def.projectileTint ?? COLORS.BONE;
+    const dur = Math.max(110, this.life(w));
+
+    const cord = this.scene.add
+      .image(p.x, p.y, TEXTURES.LASH)
+      .setOrigin(0, 0.5)
+      .setDepth(DEPTH.FX)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(tint)
+      .setScale(dir * lenScale * 0.7, thick)
+      .setAlpha(1);
+    // Snap straight out to full length (fast), then hold bright and fade.
     this.scene.tweens.add({
-      targets: slash,
-      scaleX: 1.5 * area * dir,
-      scaleY: 1.35 * area,
-      alpha: 0,
-      duration: Math.max(80, this.life(w)),
+      targets: cord,
+      scaleX: dir * lenScale,
+      duration: dur * 0.35,
       ease: 'Quad.easeOut',
-      onComplete: () => slash.destroy(),
+    });
+    this.scene.tweens.add({
+      targets: cord,
+      alpha: 0,
+      delay: dur * 0.3,
+      duration: dur * 0.7,
+      ease: 'Quad.easeIn',
+      onComplete: () => cord.destroy(),
     });
 
-    // Damage: every enemy in the arc, once, with knockback away from the player.
-    const enemies = this.ctx.getEnemiesInRadius(cx, cy, hitRadius);
+    // Tip crack flash: a small bright pop at the far end of the lash.
+    const flash = this.scene.add
+      .image(p.x + dir * frontLen * 0.92, p.y, TEXTURES.PARTICLE)
+      .setDepth(DEPTH.FX)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(tint)
+      .setScale(0.25 * area)
+      .setAlpha(0);
+    this.scene.tweens.add({
+      targets: flash,
+      alpha: { from: 0.9, to: 0 },
+      scale: 1.3 * area,
+      delay: dur * 0.15,
+      duration: dur * 0.55,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    // Damage: broad-phase a bounding circle over the box, then reject anything
+    // outside it. Knockback is away from the player (damageEnemy's default
+    // origin), independent of the box shape.
+    const boxCx = p.x + (dir * (frontLen - backLen)) / 2;
+    const boxHalfW = (frontLen + backLen) / 2;
+    const queryR = Math.hypot(boxHalfW, halfH);
+    const enemies = this.ctx.getEnemiesInRadius(boxCx, p.y, queryR);
     const dmg = this.dmg(w);
     const knock = this.knock(w);
     for (const e of enemies) {
       if (!e.active) continue;
+      const forward = (e.x - p.x) * dir; // signed distance along the lash
+      if (forward < -backLen || forward > frontLen) continue;
+      if (Math.abs(e.y - p.y) > halfH) continue;
       this.ctx.damageEnemy(e, dmg, { knockback: knock, crit: this.rollCrit(), sourceId: w.id });
     }
   }
