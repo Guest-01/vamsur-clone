@@ -112,7 +112,11 @@ export type WeaponBehaviorKind =
   | 'aura' // persistent damaging field around the player
   | 'whip' // short-lived horizontal slash to the facing side
   | 'spin' // periodic 360° cleave hitting everything around the player
-  | 'lobbed'; // projectile thrown in an arc that falls on enemies
+  | 'lobbed' // projectile thrown in an arc that falls on enemies
+  | 'chain' // strikes random enemies, arcing to nearby ones (lightning)
+  | 'boomerang' // projectile that decelerates and homes back, hitting twice
+  | 'mine' // proximity traps placed at the player's feet; explode + burn
+  | 'leech'; // tethers nearby enemies, damaging them and healing the player
 
 /** Icon source: a frame index in the tiny-dungeon spritesheet, or a generated texture. */
 export interface IconRef {
@@ -153,6 +157,16 @@ export interface WeaponDef {
    * Omit for no slow (e.g. sanctuary, which repels via knockback instead).
    */
   auraSlowMult?: number;
+  /**
+   * 'chain' only: max px an arc may jump between enemies (scaled by area).
+   * Defaults to 150 in WeaponSystem when omitted.
+   */
+  chainRange?: number;
+  /**
+   * 'leech' only: fraction of damage DEALT restored to the player as HP.
+   * Defaults to 0.2 in WeaponSystem when omitted.
+   */
+  lifestealFrac?: number;
   /** rarity weight for showing up in level-up rolls (higher = more common) */
   weight: number;
   /** per-level base damage (before player.might) */
@@ -250,6 +264,9 @@ export interface EnemyDef {
   knockbackResist: number;
   isBoss?: boolean;
   isElite?: boolean;
+  /** randomly promoted wave spawn (see EnemySpawner.championDef) — gets a
+   *  small HP bar like elites but none of the elite chest/potion drops */
+  isChampion?: boolean;
 }
 
 /* ------------------------------------------------------------------ */

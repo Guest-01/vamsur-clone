@@ -45,6 +45,14 @@ export interface ProjectileOpts {
    * then falls, while spinning. Travels horizontally via vx the whole time.
    */
   gravity?: number;
+  /**
+   * Boomerang return acceleration (px/s²). When present the projectile is
+   * continuously accelerated toward the player's LIVE position, so it flies
+   * out, turns around, and homes back. The moment it starts closing in again
+   * its hit set is cleared (each enemy can be struck once per pass), and it
+   * despawns on being "caught" (returning within hand reach).
+   */
+  returnAccel?: number;
 }
 
 /**
@@ -70,6 +78,12 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   private spin = 0;
   /** fake-gravity acceleration for lobbed shots (0 = straight flight) */
   private grav = 0;
+  /** boomerang: homing-return acceleration toward the player (0 = none) */
+  private retAccel = 0;
+  /** boomerang: still on the outbound leg (hit set clears when this flips) */
+  private outbound = false;
+  /** boomerang: squared player distance last frame (turn-around detection) */
+  private prevDistSq = 0;
   /**
    * Enemies already damaged by THIS shot. Enforces one hit per enemy so a
    * piercing shot cannot tick the same target repeatedly. Reset on every fire.
@@ -112,6 +126,9 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false); // we fake gravity manually for lobbed shots
     this.grav = opts.gravity ?? 0;
+    this.retAccel = opts.returnAccel ?? 0;
+    this.outbound = this.retAccel > 0;
+    this.prevDistSq = 0;
 
     // orientation: explicit angle, else face the direction of travel
     this.spin = opts.spin ?? 0;
@@ -144,6 +161,31 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
 
     // visual spin (axe / any spinning shot)
     if (this.spin !== 0) this.rotation += this.spin * dt;
+
+    // boomerang: home back toward the player's live position.
+    if (this.retAccel > 0) {
+      const pl = this.ctx.player;
+      const dx = pl.x - this.x;
+      const dy = pl.y - this.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      body.velocity.x += (dx / dist) * this.retAccel * dt;
+      body.velocity.y += (dy / dist) * this.retAccel * dt;
+
+      const distSq = dist * dist;
+      // Turn-around: the first frame the distance starts shrinking, open the
+      // return pass — every enemy may be hit once more on the way back.
+      if (this.outbound && this.prevDistSq > 0 && distSq < this.prevDistSq) {
+        this.outbound = false;
+        this.hitSet.clear();
+      }
+      this.prevDistSq = distSq;
+      // Caught: returned to hand reach.
+      if (!this.outbound && dist < 30) {
+        this.deactivate();
+        return;
+      }
+    }
 
     // lifetime countdown
     this.life -= delta;

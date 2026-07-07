@@ -112,7 +112,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     this.maxHp = def.baseHp * hpScale(elapsed) * curse.enemyHp;
     this.hp = this.maxHp;
     this.contactDamage = def.contactDamage * damageScale(elapsed) * curse.enemyDmg;
-    this.speed = def.moveSpeed * speedScale(elapsed);
+    this.speed = def.moveSpeed * speedScale(elapsed) * curse.enemySpeed;
 
     // reset transient state
     this.flashLeft = 0;
@@ -130,8 +130,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
       this.shadow.setPosition(x, y + this.displayHeight * 0.42);
     }
 
-    // floating HP bar for bosses & elites only
-    if (def.isBoss || def.isElite) this.ensureHpBar();
+    // floating HP bar for bosses, elites and champions
+    if (def.isBoss || def.isElite || def.isChampion) this.ensureHpBar();
     else this.hideHpBar();
   }
 

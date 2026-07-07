@@ -16,6 +16,15 @@ const gen = (texture: string) => ({ texture, frame: -1 });
  *  - aura: cooldownMs = damage tick interval, area = radius mult, persistent.
  *  - orbit: amount = orb count, speed = rotation speed (deg/s), area = radius +
  *    orb size, cooldownMs = per-enemy re-hit interval, persistent.
+ *  - chain: amount = simultaneous strikes, pierce = arc jumps per strike,
+ *    chainRange = jump reach (× area), durationMs = bolt fx lifetime.
+ *  - boomerang: amount = boomerangs/throw, speed = initial throw velocity
+ *    (return accel derives from it), durationMs = failsafe lifetime, hits once
+ *    per enemy on the way out and once again on the way back.
+ *  - mine: amount = mines per drop, area = trigger/blast radius mult,
+ *    durationMs = burn-patch lifetime, damage = blast (burn ticks at 20%).
+ *  - leech: amount = tethers, area = tether range mult, cooldownMs = tick,
+ *    lifestealFrac of damage dealt returns as HP.
  *
  * Arrays are indexed by (level - 1) and have length === maxLevel.
  */
@@ -296,6 +305,133 @@ export const WEAPONS: Record<string, WeaponDef> = {
       '쿨다운 ↓',
       '마법탄 +1, 관통 +1',
       '피해 대폭 ↑',
+    ],
+  },
+
+  lightning: {
+    id: 'lightning',
+    name: '연쇄 뇌격',
+    description: '무작위 적에게 낙뢰가 떨어지고, 근처 적에게로 번개가 연쇄한다.',
+    behavior: 'chain',
+    icon: gen(TEXTURES.ICON_LIGHTNING),
+    projectileTint: 0xffe45a,
+    chainRange: 150,
+    maxLevel: 8,
+    weight: 7,
+    // Uncontrollable targeting pays out in total hits: bolts × (1 + jumps)
+    // touches at max = 3 × 6 = 18 enemies per cast.
+    damage: [15, 19, 23, 28, 34, 41, 49, 58],
+    cooldownMs: [1600, 1550, 1500, 1450, 1400, 1350, 1300, 1200],
+    amount: [1, 1, 1, 2, 2, 2, 3, 3],
+    area: [1, 1, 1.1, 1.1, 1.2, 1.2, 1.3, 1.4],
+    speed: [0, 0, 0, 0, 0, 0, 0, 0],
+    pierce: [1, 2, 2, 3, 3, 4, 4, 5],
+    durationMs: [180, 180, 180, 180, 190, 190, 200, 210],
+    knockback: [0, 0, 20, 20, 30, 30, 40, 50],
+    levelText: [
+      '무작위 적에게 낙뢰, 1회 연쇄',
+      '연쇄 +1',
+      '피해 +4, 범위 ↑',
+      '낙뢰 +1, 연쇄 +1',
+      '피해 +6, 범위 ↑',
+      '연쇄 +1',
+      '낙뢰 +1, 범위 ↑',
+      '연쇄 +1, 피해 대폭 ↑',
+    ],
+  },
+
+  boomerang: {
+    id: 'boomerang',
+    name: '부메랑',
+    description: '던진 방향으로 날아갔다 되돌아오며, 오가는 길의 적을 두 번 벤다.',
+    behavior: 'boomerang',
+    icon: gen(TEXTURES.ICON_BOOMERANG),
+    maxLevel: 8,
+    weight: 8,
+    damage: [12, 15, 18, 22, 27, 33, 40, 48],
+    cooldownMs: [1350, 1300, 1250, 1200, 1150, 1100, 1050, 980],
+    amount: [1, 1, 2, 2, 2, 3, 3, 4],
+    area: [1, 1.1, 1.1, 1.2, 1.2, 1.3, 1.4, 1.5],
+    // outbound speed; the turn-around range grows with it (≈ speed / 1.8 px)
+    speed: [430, 440, 450, 460, 480, 500, 520, 560],
+    pierce: [99, 99, 99, 99, 99, 99, 99, 99],
+    // failsafe only — the boomerang normally despawns when it returns to hand
+    durationMs: [2600, 2600, 2700, 2700, 2800, 2800, 2900, 3000],
+    knockback: [40, 40, 50, 50, 60, 60, 70, 80],
+    levelText: [
+      '왕복하며 두 번 베는 부메랑',
+      '피해 +3, 범위 ↑',
+      '부메랑 +1',
+      '피해 +4, 범위 ↑',
+      '피해 +5, 속도 ↑',
+      '부메랑 +1',
+      '범위 ↑, 속도 ↑',
+      '부메랑 +1, 피해 대폭 ↑',
+    ],
+  },
+
+  mine: {
+    id: 'mine',
+    name: '화염 지뢰',
+    description:
+      '발밑에 지뢰를 설치한다. 밟은 적은 폭발하고, 자리에 불타는 장판이 남는다. 도망치며 싸울 때 강력하다.',
+    behavior: 'mine',
+    icon: gen(TEXTURES.ICON_MINE),
+    projectileTint: 0xff7a2a,
+    maxLevel: 8,
+    weight: 6,
+    // damage = the blast; the burn patch ticks at 20% of it every 400ms for
+    // durationMs. Slow cadence + placement skill = the highest per-hit numbers
+    // of the non-boss weapons.
+    damage: [25, 30, 37, 45, 54, 64, 76, 90],
+    cooldownMs: [2400, 2300, 2200, 2100, 2000, 1900, 1800, 1600],
+    amount: [1, 1, 1, 2, 2, 2, 3, 3],
+    area: [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.65, 1.8],
+    speed: [0, 0, 0, 0, 0, 0, 0, 0],
+    pierce: [99, 99, 99, 99, 99, 99, 99, 99],
+    durationMs: [1200, 1300, 1400, 1500, 1600, 1700, 1800, 2000],
+    knockback: [120, 130, 140, 150, 160, 170, 190, 220],
+    levelText: [
+      '밟으면 폭발하는 지뢰 설치',
+      '피해 +5, 범위 ↑',
+      '피해 +7, 불길 지속 ↑',
+      '지뢰 +1',
+      '피해 +9, 범위 ↑',
+      '불길 지속 ↑, 범위 ↑',
+      '지뢰 +1',
+      '피해 대폭 ↑, 불길 지속 ↑',
+    ],
+  },
+
+  leech: {
+    id: 'leech',
+    name: '흡혈 사슬',
+    description: '가까운 적에게 피의 사슬을 걸어 지속 피해를 주고, 피해의 일부를 체력으로 흡수한다.',
+    behavior: 'leech',
+    icon: gen(TEXTURES.ICON_FANG),
+    projectileTint: 0xff4a5a,
+    lifestealFrac: 0.2,
+    maxLevel: 8,
+    weight: 6,
+    // Low DPS for an auto-hit weapon — the payload is the sustain, and it
+    // only drains what it can reach (base range 175px × area).
+    damage: [7, 9, 11, 13, 16, 19, 23, 28],
+    cooldownMs: [850, 820, 790, 760, 730, 700, 670, 620],
+    amount: [1, 1, 1, 2, 2, 2, 3, 3],
+    area: [1, 1.1, 1.15, 1.2, 1.3, 1.35, 1.45, 1.6],
+    speed: [0, 0, 0, 0, 0, 0, 0, 0],
+    pierce: [99, 99, 99, 99, 99, 99, 99, 99],
+    durationMs: [220, 220, 220, 220, 220, 220, 220, 220],
+    knockback: [0, 0, 0, 0, 0, 0, 0, 0],
+    levelText: [
+      '가장 가까운 적을 흡혈',
+      '피해 +2, 사거리 ↑',
+      '피해 +2, 사거리 ↑',
+      '사슬 +1',
+      '피해 +3, 사거리 ↑',
+      '피해 +3, 사거리 ↑',
+      '사슬 +1',
+      '피해 대폭 ↑, 사거리 ↑',
     ],
   },
 

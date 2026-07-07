@@ -34,6 +34,10 @@ export const WEAPON_UNLOCK_COST: Record<string, number> = {
   spear: 150,
   runebolt: 200,
   miasma: 200,
+  lightning: 250,
+  boomerang: 250,
+  mine: 300,
+  leech: 300,
 };
 
 function defaults(): MetaSave {

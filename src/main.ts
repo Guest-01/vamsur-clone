@@ -85,6 +85,10 @@ function startGame(): void {
 
   const game = new Phaser.Game(config);
 
+  // Dev-only debug handle (stripped from production builds): lets the browser
+  // console / automated verification reach scenes and systems directly.
+  if (import.meta.env.DEV) (window as unknown as { game?: Phaser.Game }).game = game;
+
   // Keep the design size in sync with the screen aspect (fluid width). FIT then
   // fills the screen; scenes receive the Scale 'resize' event and re-lay-out.
   let pending = 0;

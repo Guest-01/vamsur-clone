@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { SCENES } from '../types';
-import type { OwnedWeaponView, OwnedItemView, IconRef } from '../types';
-import { GAME, COLORS, DEPTH } from '../config/balance';
+import type { OwnedWeaponView, OwnedItemView, IconRef, PlayerStats } from '../types';
+import { GAME, COLORS, DEPTH, DEFAULT_STATS } from '../config/balance';
 import { Sound } from '../audio/Sound';
 
 /** Snapshot of the current run state used to render the pause summary. */
@@ -12,9 +12,44 @@ export interface PauseSummary {
   elapsedMs: number;
   hp: number;
   maxHp: number;
+  /** live player stat block (shared by reference with the game) */
+  stats: PlayerStats;
   weapons: OwnedWeaponView[];
   items: OwnedItemView[];
 }
+
+/** signed percent vs the 1.0 baseline (1.25 -> "+25%", 0.85 -> "-15%"). */
+function signedPct(v: number): string {
+  const p = Math.round((v - 1) * 100);
+  return `${p >= 0 ? '+' : ''}${p}%`;
+}
+
+/** trim to at most `digits` decimals, dropping trailing zeros. */
+function trimDec(v: number, digits: number): string {
+  return `${parseFloat(v.toFixed(digits))}`;
+}
+
+/** Every PlayerStats entry: key, Korean label, value formatter (grid order). */
+const STAT_ROWS: ReadonlyArray<readonly [keyof PlayerStats, string, (v: number) => string]> = [
+  ['maxHp', '최대 체력', (v) => `${Math.round(v)}`],
+  ['hpRegen', '체력 재생', (v) => `${trimDec(v, 1)}/초`],
+  ['moveSpeed', '이동 속도', (v) => `${Math.round(v)}`],
+  ['might', '공격력', signedPct],
+  ['area', '공격 범위', signedPct],
+  ['cooldownMult', '쿨다운', signedPct], // lower is better: -15% reads as faster
+  ['projectileSpeed', '탄환 속도', signedPct],
+  ['amount', '투사체 추가', (v) => `+${v}`],
+  ['magnet', '자석 범위', (v) => `${Math.round(v)}`],
+  ['armor', '방어력', (v) => `${Math.round(v)}`],
+  ['xpGain', '경험치 획득', signedPct],
+  ['luck', '행운', signedPct],
+  ['critChance', '치명타 확률', (v) => `${Math.round(v * 100)}%`],
+  ['critMult', '치명타 피해', (v) => `×${trimDec(v, 2)}`],
+  ['revives', '부활', (v) => `${v}회`],
+  ['dodge', '회피', (v) => `${Math.round(v * 100)}%`],
+  ['greed', '골드 획득', signedPct],
+  ['rerolls', '리롤', (v) => `${v}회`],
+];
 
 /**
  * Pause screen built inside the UIScene. Shown on EVENTS.PAUSE_TOGGLED {paused}.
@@ -59,7 +94,7 @@ export class PauseOverlay {
     this.root.add(this.dim);
 
     // central panel
-    const panelW = 1040;
+    const panelW = 1420;
     const panelH = 800;
     this.panel = scene.add.graphics();
     this.panel.fillStyle(0x000000, 0.5).fillRoundedRect(cx - panelW / 2 + 10, cy - panelH / 2 + 14, panelW, panelH, 28);
@@ -173,7 +208,9 @@ export class PauseOverlay {
     this.body = body;
     this.root.add(body);
 
-    const panelW = 1040;
+    // Two-column body: run summary + gear on the left half, stat grid right.
+    const panelW = 1420;
+    const leftCx = cx - panelW / 4; // centre of the left half
     const left = cx - panelW / 2 + 68;
 
     // --- stat summary row (time / level / kills / gold) ---
@@ -181,7 +218,7 @@ export class PauseOverlay {
     const mmss = this.formatTime(s.elapsedMs);
     const statLine = `시간 ${mmss}    레벨 ${s.level}    처치 ${s.kills}    골드 ${s.gold}`;
     const stats = scene.add
-      .text(cx, statsY, statLine, {
+      .text(leftCx, statsY, statLine, {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '26px',
@@ -192,7 +229,7 @@ export class PauseOverlay {
     body.add(stats);
 
     const hpLine = scene.add
-      .text(cx, statsY + 38, `HP  ${Math.ceil(s.hp)} / ${Math.round(s.maxHp)}`, {
+      .text(leftCx, statsY + 38, `HP  ${Math.ceil(s.hp)} / ${Math.round(s.maxHp)}`, {
         fontFamily: '"Press Start 2P", Galmuri11, monospace',
         fontSize: '20px',
         color: '#e24b58',
@@ -222,6 +259,57 @@ export class PauseOverlay {
       );
     } else {
       this.iconRow(body, left, iLabelY + 52, s.items);
+    }
+
+    // --- full player stat grid (right half) ---
+    const gridX = cx + 48;
+    body.add(this.sectionLabel(gridX, statsY, '스탯'));
+    this.statGrid(body, gridX, statsY + 52, s.stats);
+  }
+
+  /**
+   * 2-column grid of every PlayerStats entry. Values that differ from
+   * DEFAULT_STATS render gold so buffed/spent stats pop at a glance.
+   */
+  private statGrid(
+    parent: Phaser.GameObjects.Container,
+    x: number,
+    y0: number,
+    stats: PlayerStats
+  ): void {
+    const colW = 316;
+    const rowH = 44;
+    const rows = 9;
+    for (let i = 0; i < STAT_ROWS.length; i++) {
+      const [key, label, fmt] = STAT_ROWS[i];
+      const colX = x + Math.floor(i / rows) * colW;
+      const y = y0 + (i % rows) * rowH;
+
+      parent.add(
+        this.scene.add
+          .text(colX, y, label, {
+            fontFamily: 'Cinzel, "Noto Serif KR", serif',
+            fontStyle: '700',
+            fontSize: '22px',
+            color: '#d8c9a0',
+          })
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+      );
+
+      const v = stats[key];
+      // epsilon compare: item math can leave float noise on the multipliers
+      const changed = Math.abs(v - DEFAULT_STATS[key]) > 1e-9;
+      parent.add(
+        this.scene.add
+          .text(colX + colW - 36, y, fmt(v), {
+            fontFamily: '"Press Start 2P", Galmuri11, monospace',
+            fontSize: '18px',
+            color: changed ? '#f0d896' : '#9a8f78',
+          })
+          .setOrigin(1, 0.5)
+          .setScrollFactor(0)
+      );
     }
   }
 

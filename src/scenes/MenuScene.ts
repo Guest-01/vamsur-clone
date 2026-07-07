@@ -651,7 +651,7 @@ export class MenuScene extends Phaser.Scene {
   private curseText(): string {
     if (this.curse <= 0) return '☠ 저주 계약: 없음  (W/S · ▲▼)';
     const c = this.curse;
-    return `☠ 저주 ${c}단계 — 적 강화 +${20 * c}% · 골드 +${25 * c}% · 경험치 +${15 * c}%`;
+    return `☠ 저주 ${c}단계 — 적 체력 +${35 * c}% · 골드 +${25 * c}% · 경험치 +${15 * c}%`;
   }
 
   private changeCurse(dir: number): void {

@@ -41,6 +41,10 @@ export const TEXTURES = {
   SHADOW: 'gen-shadow', // soft ellipse drop-shadow under entities
   KNIFE: 'gen-knife', // thrown knife projectile (crisp)
   SPEAR: 'gen-spear', // thrown spear/lance projectile (crisp, longer than the knife)
+  BOOMERANG: 'gen-boomerang', // spinning returning blade (projectile + icon)
+  MINE: 'gen-mine', // planted proximity mine (world sprite)
+  PICKUP_MAGNET: 'gen-pickup-magnet', // gold horseshoe — the vacuum floor drop
+  // (distinct from the red ICON_MAGNET used by the passive item)
 
   // --- generated: background + overlays ---
   BG_TILE: 'gen-bgtile', // 64x64 tileable dark dungeon floor
@@ -61,6 +65,12 @@ export const TEXTURES = {
   ICON_LEAF: 'gen-ic-leaf', // hp regen
   ICON_COIN: 'gen-ic-coin', // gold coin (sheet frame 82 reads as a barrel)
   ICON_MIRROR: 'gen-ic-mirror', // hand mirror (Mirror of Fate)
+
+  // --- generated: weapon icons for weapons with no fitting sheet frame ---
+  ICON_LIGHTNING: 'gen-ic-lightning', // jagged bolt (chain lightning)
+  ICON_BOOMERANG: 'gen-ic-boomerang', // bent throwing blade
+  ICON_MINE: 'gen-ic-mine', // spiked orb with a lit fuse eye
+  ICON_FANG: 'gen-ic-fang', // blood drop + fangs (leech)
 } as const;
 
 /** Named frame indices into the tiny-dungeon spritesheet. */

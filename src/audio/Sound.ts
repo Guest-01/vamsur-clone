@@ -46,7 +46,10 @@ export type SfxKey =
   | 'shoot'
   | 'whoosh'
   | 'spin'
-  | 'lob';
+  | 'lob'
+  | 'zap'
+  | 'explode'
+  | 'drain';
 
 const MASTER_GAIN = 0.85;
 const MUSIC_BUS_GAIN = 0.5;
@@ -64,6 +67,9 @@ const MIN_GAP_MS: Partial<Record<SfxKey, number>> = {
   whoosh: 80,
   spin: 120,
   lob: 80,
+  zap: 90,
+  explode: 140,
+  drain: 220,
   playerHurt: 180,
   uiHover: 60,
 };
@@ -438,6 +444,24 @@ class SoundEngine {
       case 'lob':
         this.noise({ dur: 0.13, gain: 0.06, type: 'lowpass', from: 800, to: 300 });
         this.tone({ type: 'sine', from: 260, to: 130, dur: 0.12, gain: 0.05 });
+        break;
+      case 'zap': {
+        // bright crackle: fast square down-chirp + a hiss of filtered noise
+        const v = 1 + (Math.random() - 0.5) * 0.15;
+        this.tone({ type: 'square', from: 1900 * v, to: 320, dur: 0.09, gain: 0.07 });
+        this.noise({ dur: 0.1, gain: 0.05, type: 'bandpass', from: 3200, to: 900, Q: 1.5 });
+        break;
+      }
+      case 'explode':
+        // initial crack, then a low rolling boom with a sub thump
+        this.noise({ dur: 0.06, gain: 0.1, type: 'highpass', from: 1800 });
+        this.noise({ dur: 0.38, gain: 0.15, type: 'lowpass', from: 650, to: 110 });
+        this.tone({ type: 'sine', from: 130, to: 42, dur: 0.32, gain: 0.17 });
+        break;
+      case 'drain':
+        // wet descending slurp for the blood tether
+        this.tone({ type: 'sawtooth', from: 300, to: 130, dur: 0.18, gain: 0.05, lowpass: 900 });
+        this.tone({ type: 'sine', from: 540, to: 240, dur: 0.16, gain: 0.04 });
         break;
     }
   }

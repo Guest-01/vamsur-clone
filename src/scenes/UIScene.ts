@@ -5,9 +5,10 @@ import type {
   OwnedWeaponView,
   OwnedItemView,
   IconRef,
+  PlayerStats,
 } from '../types';
 import { TEXTURES, FRAMES } from '../config/assets';
-import { GAME, COLORS, DEPTH } from '../config/balance';
+import { GAME, COLORS, DEPTH, DEFAULT_STATS } from '../config/balance';
 import { getCharacter } from '../content/characters';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { PauseOverlay } from '../ui/PauseOverlay';
@@ -1050,9 +1051,21 @@ export class UIScene extends Phaser.Scene {
       elapsedMs: this.state.elapsedMs,
       hp: this.state.hp,
       maxHp: this.state.maxHp,
+      stats: this.getLiveStats(),
       weapons: this.state.weapons,
       items: this.state.items,
     };
+  }
+
+  /**
+   * The live PlayerStats block for the pause panel. The GameScene keeps its
+   * GameContext private, so read it structurally (same defensive shape as the
+   * optional getHudSnapshot() call in create()); the object is shared by
+   * reference across the game's systems, so it is always current at pause time.
+   */
+  private getLiveStats(): PlayerStats {
+    const ctx = (this.gameScene as unknown as { ctx?: { stats?: PlayerStats } }).ctx;
+    return ctx?.stats ?? { ...DEFAULT_STATS };
   }
 
   /** The selected character id for the portrait (from the GameScene's run). */

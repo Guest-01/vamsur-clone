@@ -91,7 +91,8 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
 
     this.startBob(targetScale);
 
-    if (type === 'xp') this.startSparkle();
+    // Gems and the rare vacuum magnet both get the sparkle shimmer.
+    if (type === 'xp' || type === 'magnet') this.startSparkle();
     else this.stopSparkle();
   }
 
@@ -120,11 +121,13 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
         this.setCircleBody(18);
         break;
       case 'magnet':
-        this.setTexture(TEXTURES.RING, 0);
-        this.setTint(COLORS.GOLD_LIGHT);
+        // A GOLD horseshoe magnet (drawn gold, not tinted) — same silhouette as
+        // the passive 자석 item so "magnetism" reads consistently, gold vs the
+        // item's red to mark it as a rare floor power-up, sparkled (see spawn).
+        // Replaces the old RING + additive, which read as a faint hoop/ring.
+        this.setTexture(TEXTURES.PICKUP_MAGNET);
         this.setScale(0.8);
-        this.setBlendMode(Phaser.BlendModes.ADD);
-        this.setCircleBody(16);
+        this.setCircleBody(20);
         break;
       case 'chest':
         this.setTexture(TEXTURES.SPRITES, FRAMES.CHEST);

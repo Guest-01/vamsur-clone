@@ -11,7 +11,7 @@
 import Phaser from 'phaser';
 import type { EnemyDef, GameContext, IEnemySpawner, WaveEntry } from '../types';
 import { ENEMIES, WAVES } from '../content/enemies';
-import { SPAWN, curseMults } from '../config/balance';
+import { CHAMPION, SPAWN, championChance, curseMults } from '../config/balance';
 import { Enemy } from '../entities/Enemy';
 import { Sound } from '../audio/Sound';
 
@@ -22,6 +22,8 @@ export class EnemySpawner implements IEnemySpawner {
   private activeWaveIndex = -1;
   /** ms accumulated toward the next spawn burst. */
   private spawnAccum = 0;
+  /** lazily-built champion variants of base defs, keyed by base enemy id. */
+  private readonly championDefs = new Map<string, EnemyDef>();
 
   constructor(ctx: GameContext) {
     this.ctx = ctx;
@@ -67,15 +69,40 @@ export class EnemySpawner implements IEnemySpawner {
     if (toSpawn <= 0) return;
 
     const ring = this.ringRadius();
+    const champChance = championChance(elapsedMs);
     for (let i = 0; i < toSpawn; i++) {
       const id = wave.enemies[(ctx.rng.between(0, wave.enemies.length - 1)) | 0];
-      const def = ENEMIES[id];
+      let def = ENEMIES[id];
       if (!def) continue;
+      // Random champion promotion (3min+): a gold-tinted spike with ×5 hp and
+      // a fat gem, so the mid/late horde isn't pure uniform chaff.
+      if (champChance > 0 && ctx.rng.frac() < champChance) def = this.championDef(def);
       const angle = ctx.rng.frac() * Math.PI * 2;
       const x = ctx.player.x + Math.cos(angle) * ring;
       const y = ctx.player.y + Math.sin(angle) * ring;
       this.spawnEnemy(def, x, y);
     }
+  }
+
+  /** Champion variant of a base def (cached — defs are immutable data). */
+  private championDef(base: EnemyDef): EnemyDef {
+    let champ = this.championDefs.get(base.id);
+    if (!champ) {
+      champ = {
+        ...base,
+        name: `Champion ${base.name}`,
+        tint: CHAMPION.TINT,
+        baseHp: base.baseHp * CHAMPION.HP_MULT,
+        contactDamage: base.contactDamage * CHAMPION.DMG_MULT,
+        xp: base.xp * CHAMPION.XP_MULT,
+        goldChance: CHAMPION.GOLD_CHANCE,
+        scale: base.scale * CHAMPION.SCALE_MULT,
+        knockbackResist: Math.min(0.9, base.knockbackResist + CHAMPION.KNOCKBACK_RESIST_BONUS),
+        isChampion: true,
+      };
+      this.championDefs.set(base.id, champ);
+    }
+    return champ;
   }
 
   /* ----------------------------------------------------------------------- */

@@ -101,10 +101,16 @@ export const STAT_CLAMP = {
 
 /** XP required to advance FROM `level` to `level + 1`. */
 export function xpForLevel(level: number): number {
-  // gentle early ramp so the demo levels quickly, then steepens.
-  if (level <= 1) return 8;
+  // Hand-tuned discount for the first few levels: the single starting weapon
+  // makes minute 0-1.5 the weakest stretch of the run, so the second/third
+  // pick arrives sooner (was 19/31/43 via the formula below).
+  const EARLY = [8, 14, 22, 30];
+  if (level <= EARLY.length) return EARLY[level - 1];
   if (level <= 20) return Math.floor(8 + (level - 1) * 9 + Math.pow(level, 1.55));
-  return Math.floor(170 + (level - 20) * 24);
+  // linear tail continuing FROM the level-20 cost (282). The old constant here
+  // (170) sat far below it, so the cost per level DROPPED at 21+ and late-run
+  // level-ups sped back up — one more reason the endgame felt free.
+  return Math.floor(282 + (level - 20) * 24);
 }
 
 /* ------------------------------------------------------------------ */
@@ -157,16 +163,25 @@ export const PICKUP = {
 /* Difficulty scaling over time                                        */
 /* ------------------------------------------------------------------ */
 
-/** Enemy HP multiplier as a function of elapsed minutes. */
+/**
+ * Enemy HP multiplier as a function of elapsed minutes.
+ *
+ * The quadratic term matters: player DPS grows multiplicatively (weapon level
+ * × might × cooldown × amount), so a near-linear curve (the old min^1.4×0.05)
+ * collapsed after ~4 minutes. Slightly under the old curve before ~2min
+ * (easier early game), well above it late: ×3.2 @4min, ×7.1 @8min (was ×4.7).
+ */
 export function hpScale(elapsedMs: number): number {
   const min = elapsedMs / 60000;
-  return 1 + min * 0.35 + Math.pow(min, 1.4) * 0.05;
+  return 1 + min * 0.32 + min * min * 0.055;
 }
 
 /** Enemy contact-damage multiplier as a function of elapsed minutes. */
 export function damageScale(elapsedMs: number): number {
   const min = elapsedMs / 60000;
-  return 1 + min * 0.16;
+  // gentle super-linear tail: ×1.8 @4min, ×2.8 @8min (was ×2.3 @8min) — by
+  // then armor/dodge/maxHp have scaled too, so late hits must sting more.
+  return 1 + min * 0.15 + Math.pow(min, 1.5) * 0.025;
 }
 
 /** Enemy move-speed multiplier as a function of elapsed minutes. */
@@ -176,28 +191,61 @@ export function speedScale(elapsedMs: number): number {
 }
 
 /* ------------------------------------------------------------------ */
+/* Champions — randomly promoted spawns that spike the mid/late game   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Chance for a regular wave spawn to be promoted to a champion (gold-tinted,
+ * ×CHAMPION.HP_MULT hp, big gem on death). Zero for the first 3 minutes —
+ * champions exist to punctuate the stretch where raw hordes stop threatening.
+ */
+export function championChance(elapsedMs: number): number {
+  const min = elapsedMs / 60000;
+  if (min < 3) return 0;
+  return Math.min(0.06, 0.02 + (min - 3) * 0.008);
+}
+
+/** Stat multipliers applied over the base def when promoting a champion. */
+export const CHAMPION = {
+  HP_MULT: 5,
+  DMG_MULT: 1.5,
+  XP_MULT: 6,
+  SCALE_MULT: 1.35,
+  /** flat bonus, clamped to 0.9 (champions shrug off most knockback) */
+  KNOCKBACK_RESIST_BONUS: 0.3,
+  /** champions are worth looting: high flat coin chance */
+  GOLD_CHANCE: 0.8,
+  /** gold tint replaces the base def tint so promotions read at a glance */
+  TINT: 0xffc94a,
+} as const;
+
+/* ------------------------------------------------------------------ */
 /* Hard mode — the Curse Contract                                      */
 /* ------------------------------------------------------------------ */
 
 /** Highest selectable curse level. */
-export const MAX_CURSE = 5;
+export const MAX_CURSE = 7;
 
 /**
  * Per-run multipliers for the chosen curse level (0 = base game). Unlocked one
  * level at a time: beating curse N unlocks N+1 (see MetaState.maxCurseCleared).
+ * Retuned upward (was hp +20%/dmg +10% per level) — the old max curse barely
+ * outpaced a mid-game shop build; +35% hp and a speed creep per level bite.
  */
 export function curseMults(level: number): {
   enemyHp: number;
   enemyDmg: number;
+  enemySpeed: number;
   cap: number;
   gold: number;
   xp: number;
 } {
   const c = Math.max(0, level);
   return {
-    enemyHp: 1 + 0.2 * c,
-    enemyDmg: 1 + 0.1 * c,
-    cap: 1 + 0.1 * c,
+    enemyHp: 1 + 0.35 * c,
+    enemyDmg: 1 + 0.15 * c,
+    enemySpeed: 1 + 0.04 * c,
+    cap: 1 + 0.12 * c,
     gold: 1 + 0.25 * c,
     xp: 1 + 0.15 * c,
   };
@@ -224,6 +272,7 @@ export const SPAWN = {
   RING_PAD: 90,
   /** despawn enemies that wander this far from the player */
   DESPAWN_DIST: 1400,
-  /** max enemies in the pool */
-  POOL_SIZE: 400,
+  /** max enemies in the pool — must cover the worst-case concurrent cap:
+   *  final wave 270 × curse-7 cap mult 1.84 + blood-moon bonus 40 ≈ 537. */
+  POOL_SIZE: 560,
 } as const;

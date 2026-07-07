@@ -31,6 +31,9 @@ export class TextureFactory {
     this.shadow(scene);
     this.knife(scene);
     this.spear(scene);
+    this.boomerang(scene);
+    this.mine(scene);
+    this.magnetPickup(scene);
     this.bgTile(scene);
     this.vignette(scene);
     this.icons(scene);
@@ -314,6 +317,73 @@ export class TextureFactory {
     g.destroy();
   }
 
+  private static boomerang(scene: Phaser.Scene): void {
+    const S = 22;
+    const g = this.gfx(scene);
+    // two wooden arms meeting at a right angle (the classic bent L), thick
+    // enough to stay readable while spinning at speed.
+    g.fillStyle(0x9a6a34, 1);
+    g.fillRoundedRect(3, 3, 16, 6, 3); // horizontal arm
+    g.fillRoundedRect(3, 3, 6, 16, 3); // vertical arm
+    // lighter leading edges so the spin shows a glint
+    g.fillStyle(0xd8a860, 1);
+    g.fillRoundedRect(4, 4, 14, 2, 1);
+    g.fillRoundedRect(4, 4, 2, 14, 1);
+    // dark elbow rivet
+    g.fillStyle(0x4a2c18, 1).fillCircle(6, 6, 2);
+    g.generateTexture(TEXTURES.BOOMERANG, S, S);
+    g.destroy();
+  }
+
+  private static mine(scene: Phaser.Scene): void {
+    const S = 16;
+    const g = this.gfx(scene);
+    const c = S / 2;
+    // squat dark body with four stubby spikes and an ember core; the arming
+    // blink is a separate additive glow sprite layered on top at runtime.
+    g.fillStyle(0x2a2430, 1);
+    g.fillRect(c - 1.5, 0, 3, S); // vertical spikes
+    g.fillRect(0, c - 1.5, S, 3); // horizontal spikes
+    g.fillStyle(0x3a3344, 1).fillCircle(c, c, 6);
+    g.lineStyle(1.5, 0x14101c, 1).strokeCircle(c, c, 6);
+    g.fillStyle(0xff7a2a, 1).fillCircle(c, c, 2.5); // ember eye
+    g.fillStyle(0xffd8a0, 1).fillCircle(c - 1, c - 1, 1); // hot glint
+    g.generateTexture(TEXTURES.MINE, S, S);
+    g.destroy();
+  }
+
+  /**
+   * The vacuum floor pickup: a GOLD horseshoe magnet with silver poles and a
+   * glint. Same silhouette as the passive item's red ICON_MAGNET so both read
+   * as "magnetism", but a gold body (drawn, not tinted — tint multiplies and
+   * can't turn the red body gold) marks it as a rare, valuable floor power-up.
+   */
+  private static magnetPickup(scene: Phaser.Scene): void {
+    const S = 48;
+    const g = this.gfx(scene);
+    // horseshoe body (arc bend on top, two legs down) in gold
+    g.lineStyle(8, COLORS.GOLD, 1);
+    g.beginPath();
+    g.arc(24, 22, 13, Math.PI, Math.PI * 2, false);
+    g.strokePath();
+    g.fillStyle(COLORS.GOLD, 1);
+    g.fillRect(11, 22, 8, 12);
+    g.fillRect(29, 22, 8, 12);
+    // brighter gold highlight along the outer bend for a metallic sheen
+    g.lineStyle(3, COLORS.GOLD_LIGHT, 1);
+    g.beginPath();
+    g.arc(24, 22, 16, Math.PI, Math.PI * 2, false);
+    g.strokePath();
+    // silver pole tips (the classic magnet read)
+    g.fillStyle(0xcfd6e0, 1);
+    g.fillRect(11, 32, 8, 5);
+    g.fillRect(29, 32, 8, 5);
+    // a small white glint on the bend
+    g.fillStyle(0xffffff, 0.6).fillCircle(18, 12, 2);
+    g.generateTexture(TEXTURES.PICKUP_MAGNET, S, S);
+    g.destroy();
+  }
+
   private static bgTile(scene: Phaser.Scene): void {
     const S = 64;
     const g = this.gfx(scene);
@@ -538,6 +608,54 @@ export class TextureFactory {
       g.lineStyle(3, 0xffffff, 0.75);
       g.lineBetween(19, 24, 28, 13); // glint stripe
       g.fillStyle(0xffffff, 0.85).fillCircle(20, 14, 2);
+    });
+    // LIGHTNING (chain lightning) — bold jagged bolt with a pale core
+    mk(TEXTURES.ICON_LIGHTNING, (g) => {
+      const bolt = (inset: number): Phaser.Math.Vector2[] => [
+        new Phaser.Math.Vector2(29 - inset, 5 + inset),
+        new Phaser.Math.Vector2(13 + inset, 26),
+        new Phaser.Math.Vector2(22 + inset, 26),
+        new Phaser.Math.Vector2(18 + inset, 43 - inset),
+        new Phaser.Math.Vector2(36 - inset, 20),
+        new Phaser.Math.Vector2(26 - inset, 20),
+      ];
+      g.fillStyle(0xf0c83c, 1).fillPoints(bolt(0), true);
+      g.fillStyle(0xfff2b0, 1).fillPoints(bolt(3), true);
+    });
+    // BOOMERANG — the projectile's bent L, redrawn chunky at icon size
+    mk(TEXTURES.ICON_BOOMERANG, (g) => {
+      g.fillStyle(0x9a6a34, 1);
+      g.fillRoundedRect(8, 8, 32, 11, 5);
+      g.fillRoundedRect(8, 8, 11, 32, 5);
+      g.fillStyle(0xd8a860, 1);
+      g.fillRoundedRect(10, 10, 28, 4, 2);
+      g.fillRoundedRect(10, 10, 4, 28, 2);
+      g.fillStyle(0x4a2c18, 1).fillCircle(13, 13, 3.5);
+    });
+    // MINE — spiked orb with an ember eye
+    mk(TEXTURES.ICON_MINE, (g) => {
+      g.fillStyle(0x2a2430, 1);
+      g.fillRect(21, 4, 6, 40);
+      g.fillRect(4, 21, 40, 6);
+      // diagonal studs
+      g.fillCircle(11, 11, 3);
+      g.fillCircle(37, 11, 3);
+      g.fillCircle(11, 37, 3);
+      g.fillCircle(37, 37, 3);
+      g.fillStyle(0x3a3344, 1).fillCircle(24, 24, 15);
+      g.lineStyle(3, 0x14101c, 1).strokeCircle(24, 24, 15);
+      g.fillStyle(0xff7a2a, 1).fillCircle(24, 24, 6);
+      g.fillStyle(0xffd8a0, 1).fillCircle(22, 22, 2.5);
+    });
+    // FANG (leech) — a fat blood drop flanked by two pale fangs
+    mk(TEXTURES.ICON_FANG, (g) => {
+      g.fillStyle(0xeef2f7, 1);
+      g.fillTriangle(10, 8, 20, 8, 15, 26); // left fang
+      g.fillTriangle(28, 8, 38, 8, 33, 26); // right fang
+      g.fillStyle(COLORS.BLOOD, 1);
+      g.fillTriangle(24, 14, 33, 30, 15, 30); // drop tip (points up)
+      g.fillCircle(24, 32, 9); // drop body
+      g.fillStyle(0xffffff, 0.4).fillCircle(21, 29, 2.5); // glint
     });
     // LEAF (hp regen) — sprouting leaf with a stem
     mk(TEXTURES.ICON_LEAF, (g) => {

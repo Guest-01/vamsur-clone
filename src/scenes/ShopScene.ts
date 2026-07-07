@@ -755,18 +755,23 @@ export class ShopScene extends Phaser.Scene {
       return;
     }
 
-    const n = entries.length;
+    // Compact cells wrapped into a width-responsive grid (like the power-up
+    // grid above): the unlock list outgrew the old single centred row — with
+    // 10 locked entries it was 3060px wide and overflowed both screen edges.
     const cellW = 288;
-    const cellH = 168;
-    const gap = 20;
-    const totalW = n * cellW + (n - 1) * gap;
+    const cellH = 84;
+    const colGap = 20;
+    const rowGap = 14;
+    const margin = 56;
+    const usable = W - margin * 2;
+    const cols = Phaser.Math.Clamp(Math.floor((usable + colGap) / (cellW + colGap)), 3, 6);
+    const totalW = cols * cellW + (cols - 1) * colGap;
     const startX = W / 2 - totalW / 2 + cellW / 2;
-    // Sits right under the header; compact enough to clear the back button
-    // even when a tall power-up grid pushed the whole section down.
-    const cy = headerY + 116;
+    const topY = headerY + 44;
 
     entries.forEach((e, i) => {
-      const cx = startX + i * (cellW + gap);
+      const cx = startX + (i % cols) * (cellW + colGap);
+      const cy = topY + cellH / 2 + Math.floor(i / cols) * (cellH + rowGap);
       this.buildUnlockCell(e, cx, cy, cellW, cellH);
     });
   }
@@ -787,32 +792,34 @@ export class ShopScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT);
     this.content.add(panel);
 
+    // horizontal layout: icon left, name + cost stacked to its right
     const portrait = this.add
-      .image(cx, cy - 40, TEXTURES.PIXEL)
+      .image(cx - cellW / 2 + 42, cy, TEXTURES.PIXEL)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 1);
-    this.applyIcon(portrait, e.icon, ENTITY_SCALE * 3.0);
+    this.applyIcon(portrait, e.icon, ENTITY_SCALE * 2.0);
     this.content.add(portrait);
 
+    const textLeft = cx - cellW / 2 + 82;
     const name = this.add
-      .text(cx, cy + 24, e.name, {
+      .text(textLeft, cy - 16, e.name, {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
-        fontSize: '24px',
+        fontSize: '21px',
         color: hex(COLORS.BONE),
       })
-      .setOrigin(0.5)
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 1);
 
     const cost = this.add
-      .text(cx, cy + 56, `🔒 ${e.cost}`, {
+      .text(textLeft, cy + 17, `🔒 ${e.cost}`, {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
-        fontSize: '24px',
+        fontSize: '20px',
         color: hex(affordable ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT),
       })
-      .setOrigin(0.5)
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPTEXT + 1);
     this.content.add([name, cost]);

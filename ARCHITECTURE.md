@@ -118,7 +118,7 @@ re-hit cooldown map) must store + compare `spawnGen` to detect recycling.
 `class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike`
 
 - `constructor(scene)`: `super(scene, 0, 0, TEXTURES.SPRITES, 0)`; add to scene + physics; start inactive. Give it a circular body.
-- `spawn(ctx, def: EnemyDef, x, y)`: store ctx + def; `setActive(true).setVisible(true)`, enable body; `setTexture(TEXTURES.SPRITES, def.frame)`; apply `def.tint` if present (else `clearTint`); `setScale(ENTITY_SCALE * def.scale)`; `setDepth(def.isBoss ? DEPTH.ENEMY + 1 : DEPTH.ENEMY)`. Compute scaled stats from time: `maxHp = def.baseHp * hpScale(ctx.run.elapsedMs)`, `hp = maxHp`; cache `contactDamage = def.contactDamage * damageScale(...)`, `speed = def.moveSpeed * speedScale(...)`. Reset hit-flash + a per-frame "touched player" cooldown. Bosses/elites: optionally add a small health bar above them and a faint tint pulse.
+- `spawn(ctx, def: EnemyDef, x, y)`: store ctx + def; `setActive(true).setVisible(true)`, enable body; `setTexture(TEXTURES.SPRITES, def.frame)`; apply `def.tint` if present (else `clearTint`); `setScale(ENTITY_SCALE * def.scale)`; `setDepth(def.isBoss ? DEPTH.ENEMY + 1 : DEPTH.ENEMY)`. Compute scaled stats from time: `maxHp = def.baseHp * hpScale(ctx.run.elapsedMs)`, `hp = maxHp`; cache `contactDamage = def.contactDamage * damageScale(...)`, `speed = def.moveSpeed * speedScale(...)`. Reset hit-flash + a per-frame "touched player" cooldown. The run's curse-contract multipliers (`curseMults`) scale hp/damage/speed on top of the time curves. Bosses/elites/champions: add a small health bar above them and a faint tint pulse.
 - `preUpdate(time, delta)` (after super): if inactive return. Steer toward `ctx.player` at `speed` (for `wander-chase` add slight sine wobble; `charger` periodically dashes — optional, default plain chase). Face the player (flip X). Despawn if farther than `SPAWN.DESPAWN_DIST` from the player (just `deactivate`, no death/drop). Keep a shadow if you added one.
 - `takeDamage(amount, from?, knockback?)`: `hp -= amount`; white hit-flash; spawn a tiny hit spark (TEXTURES.SPARK/PARTICLE). Apply knockback impulse away from `from` scaled by `(1 - def.knockbackResist)` (set a short-lived velocity, then resume chase). If `hp <= 0` → `die()`.
 - `die()`: `ctx.addKill()`; `ctx.spawnXpGem(x, y, def.xp)`; if `rng < def.goldChance` → `ctx.spawnPickup(x, y, 'gold')`; elites/bosses → also `ctx.spawnPickup(x, y, 'chest')`; emit a death poof (particles); if boss → big shake + bright flash. `deactivate()`.
@@ -127,7 +127,7 @@ re-hit cooldown map) must store + compare `spawnGen` to detect recycling.
 ### `src/systems/EnemySpawner.ts` → `export class EnemySpawner implements IEnemySpawner`
 
 - `constructor(ctx)`. Reads `WAVES` + `ENEMIES`.
-- `update(time, delta)`: pick the active wave (latest whose `timeSec*1000 <= elapsedMs`). On wave change, if it has a `bossId`, spawn that boss once (near the player, off-screen). Maintain spawn cadence: every `spawnIntervalSec`, if alive enemy count < `cap`, spawn `burst` enemies at random points on a ring just outside the camera view (use camera size + `SPAWN.RING_PAD`; pick random angle, place relative to player). Pull enemies from the pool (pattern above) using `ctx.enemies`.
+- `update(time, delta)`: pick the active wave (latest whose `timeSec*1000 <= elapsedMs`). On wave change, if it has a `bossId`, spawn that boss once (near the player, off-screen). Maintain spawn cadence: every `spawnIntervalSec`, if alive enemy count < `cap`, spawn `burst` enemies at random points on a ring just outside the camera view (use camera size + `SPAWN.RING_PAD`; pick random angle, place relative to player). Pull enemies from the pool (pattern above) using `ctx.enemies`. From 3min on, each cadence spawn has a small `championChance` of being promoted to a **champion** — a gold-tinted variant (`CHAMPION` mults: ×5 hp, bigger body, a fat XP gem, high knockback resist; `isChampion` gives it a health bar but none of the elite chest/potion drops). Champion defs are derived once per base id and cached.
 - Count alive enemies via `ctx.enemies.countActive(true)`.
 
 ## C. Weapons — `src/systems/WeaponSystem.ts` → `export class WeaponSystem implements IWeaponSystem`
@@ -154,6 +154,11 @@ Effective values: `damage = def.damage[lvl] * stats.might` (roll crit per hit us
 - **whip**: spawn a short-lived `TEXTURES.SLASH` sprite to the facing side (and the opposite side if `count >= 2`), scaled by `area`, depth FX, additive. Immediately damage all enemies inside its box/arc once (use `ctx.getEnemiesInRadius` around an offset point, or an overlap rect). Apply knockback. Tween scale/alpha out over `life`.
 - **aura** (sanctuary): keep a persistent `TEXTURES.AURA` sprite centred on the player, tinted holy (e.g. `COLORS.GOLD_LIGHT` or a soft cyan), radius from `area`. Every `cooldownMs[lvl]` tick, damage all enemies within the radius (`ctx.getEnemiesInRadius`). Light knockback at high level. Pulse the alpha gently.
 - **orbit** (spirit orbs): keep `count` `TEXTURES.ORB` sprites orbiting the player at radius from `area`, angular speed `speed` deg/s. On contact (manual distance check or per-orb overlap) deal damage with a per-enemy re-hit cooldown (`cooldownMs[lvl]`).
+- **spin** (greatsword): burst 360° cleave — damage everything within reach of the player at once; whirling-crescent + shock-ring fx.
+- **chain** (lightning): pick up to `count` RANDOM enemies near the player, then arc from each to the nearest not-yet-struck enemy within `def.chainRange * area`, up to `pierce` jumps. One shared struck-set per volley so bolts spread. Jagged additive Graphics bolts, no projectiles.
+- **boomerang**: `count` `TEXTURES.BOOMERANG` projectiles thrown along facing with `returnAccel` (see Projectile) — they decelerate, home back to the player, and may hit each enemy once per pass (out + back).
+- **mine**: on cooldown plant `count` mines at the player's feet (arm delay, concurrency cap, oldest fizzles). An armed mine explodes when an enemy enters its trigger radius: AoE damage + knockback, then a burning patch (`durationMs` life) ticks `BURN_DMG_FRAC` of the blast every `BURN_TICK_MS`. All managed inside WeaponSystem (no physics projectiles).
+- **leech**: every `cooldownMs` tick, tether up to `count` nearest enemies within `LEECH_BASE_RANGE * area`; damage them and heal the player for `def.lifestealFrac` of the damage dealt. Blood-cord fx reuses `TEXTURES.LASH`.
 
 ### `src/entities/Projectile.ts` → `export class Projectile`
 
@@ -202,8 +207,9 @@ Effective values: `damage = def.damage[lvl] * stats.might` (roll crit per hit us
 `class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike`
 
 - Types: `xp` (gem; choose `TEXTURES.GEM_S/M/L` by value vs `GEM_TIERS`), `health`
-  (`FRAMES.POTION_RED`), `gold` (`FRAMES.COINS`), `magnet` (`TEXTURES.RING` or a
-  bottle frame), `chest` (`FRAMES.CHEST`).
+  (`FRAMES.POTION_RED`), `gold` (`FRAMES.COINS`), `magnet` (a gold-tinted
+  `TEXTURES.ICON_MAGNET` — the same horseshoe as the passive item, sparkled),
+  `chest` (`FRAMES.CHEST`).
 - `spawn(ctx, type, x, y, value)`: activate, choose texture/frame, depth
   `DEPTH.PICKUP`, small spawn pop tween + gentle idle bob. Gems sparkle.
 - `preUpdate`: distance to player. If within `max(stats.magnet, ...)` accelerate
