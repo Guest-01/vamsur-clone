@@ -4,6 +4,7 @@ import { EVENTS } from '../types';
 import { TEXTURES, SHEET } from '../config/assets';
 import { COLORS, DEPTH, ENTITY_SCALE, PLAYER } from '../config/balance';
 import { MoveInput } from '../input/MoveInput';
+import { Sound } from '../audio/Sound';
 
 /**
  * The player avatar. A pooled-free, single-instance Arcade sprite that reads
@@ -242,6 +243,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite implements PlayerLike {
     // Armor is flat reduction, but a hit always stings for at least 1.
     const dmg = Math.max(1, amount - this.stats.armor);
     this.hp -= dmg;
+    Sound.play('playerHurt');
 
     // Open the invulnerability window.
     this.iframeUntil = now + PLAYER.IFRAME_MS;

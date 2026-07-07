@@ -14,6 +14,8 @@ import { PauseOverlay } from '../ui/PauseOverlay';
 import { HelpOverlay } from '../ui/HelpOverlay';
 import type { PauseSummary } from '../ui/PauseOverlay';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
+import { Sound } from '../audio/Sound';
+import { Music } from '../audio/Music';
 // Type-only import so we can type the GameScene reference for getHudSnapshot().
 import type { GameScene } from './GameScene';
 
@@ -39,6 +41,8 @@ const HUD_DEPTH = DEPTH.POPTEXT + 10;
 const PAUSE_BTN_SIZE = 64;
 const PAUSE_BTN_MARGIN = 32;
 const PAUSE_BTN_Y = 204;
+// Mute (speaker) button sits directly below the pause button.
+const MUTE_BTN_Y = PAUSE_BTN_Y + PAUSE_BTN_SIZE + 20;
 
 /**
  * Heads-up display. Runs on top of GameScene (scene.launch) and is NEVER paused,
@@ -98,6 +102,11 @@ export class UIScene extends Phaser.Scene {
   // --- touch controls (mobile) ---
   private joystick?: VirtualJoystick;
   private pauseButton!: Phaser.GameObjects.Container;
+
+  // --- mute (speaker) button ---
+  private muteButton!: Phaser.GameObjects.Container;
+  /** redraw callback registered on Sound.onChanged (detached in teardown) */
+  private muteRedraw?: () => void;
 
   // --- tweens we keep handles to so they can be retargeted/cancelled ---
   private xpTween?: Phaser.Tweens.Tween;
@@ -199,6 +208,7 @@ export class UIScene extends Phaser.Scene {
     // ignores mouse) + an on-screen pause button (no ESC on touch devices).
     this.joystick = new VirtualJoystick(this);
     this.buildPauseButton();
+    this.buildMuteButton();
 
     // Landscape-responsive: reposition the width-dependent HUD pieces when the
     // live width changes. We do NOT restart (it would desync the running game /
@@ -248,8 +258,9 @@ export class UIScene extends Phaser.Scene {
     this.eventBannerName.setX(w / 2);
     this.eventBannerDesc.setX(w / 2);
 
-    // right-anchored pause button
+    // right-anchored pause + mute buttons
     this.pauseButton.x = w - PAUSE_BTN_MARGIN - PAUSE_BTN_SIZE / 2;
+    this.muteButton.x = w - PAUSE_BTN_MARGIN - PAUSE_BTN_SIZE / 2;
   }
 
   /* --------------------------------------------------------------- */
@@ -269,6 +280,10 @@ export class UIScene extends Phaser.Scene {
     g.on(EVENTS.PAUSE_TOGGLED, this.onPauseToggled, this);
     g.on(EVENTS.RUN_EVENT, this.onRunEvent, this);
     g.on(EVENTS.CHEST_DIR, this.onChestDir, this);
+    // Scene lifecycle: the GameScene pauses for BOTH the pause overlay and the
+    // level-up choice — duck the music behind either modal, restore on resume.
+    g.on(Phaser.Scenes.Events.PAUSE, this.onGamePaused, this);
+    g.on(Phaser.Scenes.Events.RESUME, this.onGameResumed, this);
   }
 
   private teardown(g: Phaser.Events.EventEmitter): void {
@@ -284,6 +299,10 @@ export class UIScene extends Phaser.Scene {
     g.off(EVENTS.PAUSE_TOGGLED, this.onPauseToggled, this);
     g.off(EVENTS.RUN_EVENT, this.onRunEvent, this);
     g.off(EVENTS.CHEST_DIR, this.onChestDir, this);
+    g.off(Phaser.Scenes.Events.PAUSE, this.onGamePaused, this);
+    g.off(Phaser.Scenes.Events.RESUME, this.onGameResumed, this);
+    if (this.muteRedraw) Sound.offChanged(this.muteRedraw);
+    Music.duck(false);
     this.escKey?.removeAllListeners();
     this.levelUpOverlay?.destroy();
     this.pauseOverlay?.destroy();
@@ -336,6 +355,14 @@ export class UIScene extends Phaser.Scene {
   private onItemsChanged(p: { owned: OwnedItemView[] }): void {
     this.state.items = p.owned ?? [];
     this.rebuildTray();
+  }
+
+  private onGamePaused(): void {
+    Music.duck(true);
+  }
+
+  private onGameResumed(): void {
+    Music.duck(false);
   }
 
   private onPlayerHit(): void {
@@ -808,9 +835,63 @@ export class UIScene extends Phaser.Scene {
   private onPauseButton(): void {
     // Do nothing if a modal is already up (level-up choice / already paused).
     if (this.levelUpOverlay.isVisible() || this.pauseOverlay.isVisible()) return;
+    Sound.play('uiClick');
     this.scene.pause(SCENES.GAME);
     this.pauseOpenedAt = this.time.now;
     this.pauseOverlay.show(this.buildPauseSummary());
+  }
+
+  /**
+   * Master mute (speaker) button under the pause button. The M key toggles the
+   * same global state (handled inside Sound); the icon re-renders through
+   * Sound.onChanged so both paths stay in sync.
+   */
+  private buildMuteButton(): void {
+    const size = PAUSE_BTN_SIZE;
+    const c = this.add
+      .container(this.scale.width - PAUSE_BTN_MARGIN - size / 2, MUTE_BTN_Y)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH + 8);
+
+    const bg = this.add.graphics();
+    const draw = (hot: boolean): void => {
+      const muted = Sound.muted;
+      bg.clear();
+      bg.fillStyle(hot ? COLORS.PANEL_LIGHT : COLORS.PANEL, 0.92).fillRoundedRect(-size / 2, -size / 2, size, size, 12);
+      bg.lineStyle(4, COLORS.GOLD, hot ? 1 : 0.8).strokeRoundedRect(-size / 2, -size / 2, size, size, 12);
+      // speaker glyph: box + cone (dimmed while muted)
+      bg.fillStyle(muted ? 0x8a8296 : COLORS.GOLD_LIGHT, 1);
+      bg.fillRect(-20, -7, 9, 14);
+      bg.fillTriangle(-12, 0, 0, -15, 0, 15);
+      if (muted) {
+        // red strike-through
+        bg.lineStyle(5, COLORS.BLOOD_LIGHT, 1);
+        bg.lineBetween(6, -10, 20, 10);
+        bg.lineBetween(20, -10, 6, 10);
+      } else {
+        // sound waves
+        bg.lineStyle(4, COLORS.GOLD_LIGHT, 0.9);
+        bg.beginPath();
+        bg.arc(2, 0, 9, -0.85, 0.85);
+        bg.strokePath();
+        bg.beginPath();
+        bg.arc(2, 0, 15, -0.85, 0.85);
+        bg.strokePath();
+      }
+    };
+    draw(false);
+    c.add(bg);
+
+    // clickable zone LAST (container children ignore depth; input follows add order)
+    const zone = this.add.zone(0, 0, size, size).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => draw(true));
+    zone.on('pointerout', () => draw(false));
+    zone.on('pointerdown', () => Sound.toggleMuted()); // redraw arrives via onChanged
+    c.add(zone);
+
+    this.muteButton = c;
+    this.muteRedraw = () => draw(false);
+    Sound.onChanged(this.muteRedraw);
   }
 
   /* --------------------------------------------------------------- */

@@ -16,6 +16,7 @@ import Phaser from 'phaser';
 import type { GameContext } from '../types';
 import { EVENTS } from '../types';
 import type { EnemySpawner } from './EnemySpawner';
+import { Sound } from '../audio/Sound';
 
 type RunEventId = 'goldRush' | 'bloodMoon' | 'ghostParade';
 
@@ -113,6 +114,7 @@ export class RunEvents {
       this.active = e;
       this.activeEndMs = run.elapsedMs + e.durationSec * 1000;
     }
+    Sound.play('eventStart');
     this.emit(e, true);
   }
 

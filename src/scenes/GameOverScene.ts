@@ -5,6 +5,7 @@ import type { IconRef, OwnedWeaponView, OwnedItemView, RunSummary } from '../typ
 import { TEXTURES } from '../config/assets';
 import { COLORS, GAME, DEPTH, ENTITY_SCALE } from '../config/balance';
 import { formatTime } from './MenuScene';
+import { Sound } from '../audio/Sound';
 
 /** Convert a 0xRRGGBB number into a `#rrggbb` css string for canvas text. */
 function hex(c: number): string {
@@ -340,11 +341,13 @@ export class GameOverScene extends Phaser.Scene {
   private buildButtons(W: number, s: RunSummary): void {
     const by = GAME.HEIGHT / 2 + 316;
     this.makeButton(W / 2 - 192, by, '다시 도전', COLORS.GOLD, () => {
+      Sound.play('uiConfirm');
       this.transition(() =>
         this.scene.start(SCENES.GAME, { characterId: s.characterId, curse: s.curse })
       );
     });
     this.makeButton(W / 2 + 192, by, '메뉴로', COLORS.PANEL_BORDER, () => {
+      Sound.play('uiClick');
       this.transition(() => this.scene.start(SCENES.MENU));
     });
   }
@@ -376,6 +379,7 @@ export class GameOverScene extends Phaser.Scene {
       .setDepth(DEPTH.POPTEXT + 1);
 
     bg.on('pointerover', () => {
+      Sound.play('uiHover');
       bg.setFillStyle(accent, 0.28);
       bg.setScale(1.05);
       txt.setScale(1.05);
@@ -397,6 +401,7 @@ export class GameOverScene extends Phaser.Scene {
     if (!kb) return;
     // ENTER = retry (same character AND same curse level)
     kb.on('keydown-ENTER', () => {
+      Sound.play('uiConfirm');
       this.transition(() =>
         this.scene.start(SCENES.GAME, {
           characterId: this.summary.characterId,
@@ -406,6 +411,7 @@ export class GameOverScene extends Phaser.Scene {
     });
     // ESC = back to menu
     kb.on('keydown-ESC', () => {
+      Sound.play('uiClick');
       this.transition(() => this.scene.start(SCENES.MENU));
     });
   }

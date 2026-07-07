@@ -12,6 +12,7 @@ import { WEAPONS } from '../content/weapons';
 import { TEXTURES, FRAMES } from '../config/assets';
 import { COLORS, DEPTH, ENTITY_SCALE } from '../config/balance';
 import { Projectile } from '../entities/Projectile';
+import { Sound } from '../audio/Sound';
 
 /**
  * One orbit re-hit cooldown entry. Enemies are pooled, so the sprite reference
@@ -189,20 +190,27 @@ export class WeaponSystem implements IWeaponSystem {
 
   /** Dispatch one cooldown-driven fire by behavior. */
   private fireCooldownWeapon(w: WeaponState): void {
+    // One (quiet, rate-limited) sound per volley — never per projectile, or a
+    // high-amount build turns into machine-gun noise.
     switch (w.def.behavior) {
       case 'projectile-facing':
+        Sound.play('shoot');
         this.fireFacing(w);
         break;
       case 'projectile-nearest':
+        Sound.play('shoot');
         this.fireNearest(w);
         break;
       case 'lobbed':
+        Sound.play('lob');
         this.fireLobbed(w);
         break;
       case 'whip':
+        Sound.play('whoosh');
         this.fireWhip(w);
         break;
       case 'spin':
+        Sound.play('spin');
         this.fireSpin(w);
         break;
       default:

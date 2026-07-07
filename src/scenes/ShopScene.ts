@@ -8,6 +8,8 @@ import { POWERUPS, CONSUMABLES } from '../content/powerups';
 import { CHARACTERS } from '../content/characters';
 import { WEAPONS } from '../content/weapons';
 import { MetaState } from '../state/MetaState';
+import { Sound } from '../audio/Sound';
+import { Music } from '../audio/Music';
 
 /** Convert a 0xRRGGBB number into a `#rrggbb` css string for canvas text. */
 function hex(c: number): string {
@@ -63,6 +65,9 @@ export class ShopScene extends Phaser.Scene {
     this.rebuild();
     this.refreshGold();
     this.bindInput();
+
+    // Same ambient loop as the menu (no-op if it is already playing).
+    Music.play('menu');
 
     // Landscape-responsive: a restart re-centers the whole shop for the new
     // width (rotation / resize); purchases already persist in MetaState.
@@ -459,19 +464,23 @@ export class ShopScene extends Phaser.Scene {
 
   private tryBuyPowerup(id: string): void {
     if (MetaState.buyPowerup(id)) {
+      Sound.play('uiBuy');
       this.rebuild();
       this.refreshGold();
     } else {
+      Sound.play('uiDenied');
       this.denyFeedback();
     }
   }
 
   private tryRefundPowerup(id: string): void {
     if (MetaState.refundPowerup(id)) {
+      Sound.play('uiRefund');
       this.rebuild();
       this.refreshGold();
       this.gainFeedback();
     } else {
+      Sound.play('uiDenied');
       this.denyFeedback();
     }
   }
@@ -539,6 +548,7 @@ export class ShopScene extends Phaser.Scene {
     zone.on('pointerdown', () => {
       if (!armed) {
         armed = true;
+        Sound.play('uiClick');
         label.setText('한 번 더 클릭').setColor('#ffffff');
         draw(true, true);
         disarmTimer = this.time.delayedCall(2500, disarm);
@@ -546,10 +556,12 @@ export class ShopScene extends Phaser.Scene {
         disarmTimer?.remove();
         const total = MetaState.refundAllPowerups();
         if (total > 0) {
+          Sound.play('uiRefund');
           this.rebuild();
           this.refreshGold();
           this.gainFeedback();
         } else {
+          Sound.play('uiDenied');
           disarm();
           this.denyFeedback();
         }
@@ -694,9 +706,11 @@ export class ShopScene extends Phaser.Scene {
   private tryBuyConsumable(id: string, held: boolean): void {
     if (held) return; // already stocked — nothing to buy
     if (MetaState.buyConsumable(id)) {
+      Sound.play('uiBuy');
       this.rebuild();
       this.refreshGold();
     } else {
+      Sound.play('uiDenied');
       this.denyFeedback();
     }
   }
@@ -817,9 +831,11 @@ export class ShopScene extends Phaser.Scene {
   private tryUnlock(e: UnlockEntry): void {
     const ok = e.kind === 'char' ? MetaState.unlockCharacter(e.id) : MetaState.unlockWeapon(e.id);
     if (ok) {
+      Sound.play('uiBuy');
       this.rebuild();
       this.refreshGold();
     } else {
+      Sound.play('uiDenied');
       this.denyFeedback();
     }
   }
@@ -873,6 +889,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private goBack(): void {
+    Sound.play('uiClick');
     this.input.enabled = false;
     this.cameras.main.fadeOut(280, 7, 7, 12);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {

@@ -8,10 +8,12 @@ signatures so the parts integrate.
 > **Status note:** the implementation has since grown past this original build
 > spec — 5 characters, 10 weapons, 18 passive items, a persistent meta shop
 > (`state/MetaState.ts`, `scenes/ShopScene.ts`), landscape-responsive scaling
-> and touch controls (`input/`, `ui/VirtualJoystick.ts`). The core architecture
-> described here (GameContext, pooling, events, scene flow) still holds; where
-> a detail (counts, exact numbers, layout sizes) disagrees with the code, the
-> code is current.
+> and touch controls (`input/`, `ui/VirtualJoystick.ts`), and procedural audio
+> (`audio/Sound.ts` synthesized SFX + `audio/Music.ts` sequenced BGM — no audio
+> files, master mute persisted under `REGISTRY.MUTED`, M key / HUD & menu
+> buttons). The core architecture described here (GameContext, pooling, events,
+> scene flow) still holds; where a detail (counts, exact numbers, layout sizes)
+> disagrees with the code, the code is current.
 
 Read these files first — they are the single source of truth and already exist:
 
@@ -27,7 +29,9 @@ Read these files first — they are the single source of truth and already exist
 
 1. **Never import one gameplay module from another.** Everything talks through
    the `GameContext` object (`src/types.ts`). The only cross-imports allowed are:
-   from `types.ts`, `config/*`, `content/*`, `systems/stats.ts`, and `gfx/*`.
+   from `types.ts`, `config/*`, `content/*`, `systems/stats.ts`, `gfx/*`, and
+   `audio/*` (the procedural `Sound`/`Music` singletons — infrastructure like
+   `state/MetaState.ts`, callable from any scene/system/entity).
    Systems may import the content registries (`WEAPONS`, `ITEMS`, `ENEMIES`,
    `CHARACTERS`, `WAVES`). UI/scene code reads live state via events + a snapshot.
    **Two sanctioned exceptions:** a system that OWNS a pool imports its pooled

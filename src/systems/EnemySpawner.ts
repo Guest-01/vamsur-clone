@@ -13,6 +13,7 @@ import type { EnemyDef, GameContext, IEnemySpawner, WaveEntry } from '../types';
 import { ENEMIES, WAVES } from '../content/enemies';
 import { SPAWN, curseMults } from '../config/balance';
 import { Enemy } from '../entities/Enemy';
+import { Sound } from '../audio/Sound';
 
 export class EnemySpawner implements IEnemySpawner {
   private ctx: GameContext;
@@ -113,6 +114,7 @@ export class EnemySpawner implements IEnemySpawner {
   private spawnBoss(bossId: string): void {
     const def = ENEMIES[bossId];
     if (!def) return;
+    Sound.play('bossSpawn');
     const ring = this.ringRadius();
     const angle = this.ctx.rng.frac() * Math.PI * 2;
     const x = this.ctx.player.x + Math.cos(angle) * ring;

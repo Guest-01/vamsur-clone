@@ -16,6 +16,8 @@ import { WEAPONS } from '../content/weapons';
 import { ENEMIES } from '../content/enemies';
 import { HelpOverlay } from '../ui/HelpOverlay';
 import { MetaState } from '../state/MetaState';
+import { Sound } from '../audio/Sound';
+import { Music } from '../audio/Music';
 
 /* ------------------------------------------------------------------ */
 /* Small style helpers (shared look used by Menu + GameOver alike)     */
@@ -117,6 +119,9 @@ export class MenuScene extends Phaser.Scene {
 
     this.refreshSelection();
     this.bindInput();
+
+    // Ambient menu loop (procedural; keeps playing seamlessly into the shop).
+    Music.play('menu');
 
     // Landscape-responsive: rebuild the whole layout when the live width changes
     // (device rotation / window resize). A restart is the simplest correct
@@ -349,6 +354,7 @@ export class MenuScene extends Phaser.Scene {
         if (this.selected === i) {
           this.descend();
         } else {
+          Sound.play('uiClick');
           this.selected = i;
           this.refreshSelection();
         }
@@ -523,7 +529,33 @@ export class MenuScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     guide.on('pointerover', () => guide.setColor(hex(COLORS.GOLD_LIGHT)));
     guide.on('pointerout', () => guide.setColor(hex(COLORS.PARCHMENT)));
-    guide.on('pointerdown', () => this.help.show());
+    guide.on('pointerdown', () => {
+      Sound.play('uiClick');
+      this.help.show();
+    });
+
+    // master mute toggle (top-right, under the best-time readout; M also works
+    // everywhere — the icon re-renders through Sound.onChanged either way)
+    const mute = this.add
+      .text(W - 40, 152, '', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '26px',
+        color: hex(COLORS.PARCHMENT),
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(DEPTH.POPTEXT)
+      .setInteractive({ useHandCursor: true });
+    const refreshMute = (): void => {
+      mute.setText(Sound.muted ? '🔇 음소거 (M)' : '🔊 사운드 (M)');
+    };
+    refreshMute();
+    mute.on('pointerover', () => mute.setColor(hex(COLORS.GOLD_LIGHT)));
+    mute.on('pointerout', () => mute.setColor(hex(COLORS.PARCHMENT)));
+    mute.on('pointerdown', () => Sound.toggleMuted());
+    Sound.onChanged(refreshMute);
+    // The scene restarts on resize — always drop the listener with the build.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => Sound.offChanged(refreshMute));
 
     // shop button (top-left, mirrors the guide button; also opens with B)
     const shop = this.add
@@ -624,7 +656,9 @@ export class MenuScene extends Phaser.Scene {
 
   private changeCurse(dir: number): void {
     if (this.maxCurse <= 0 || this.help?.isVisible()) return;
-    this.curse = Phaser.Math.Clamp(this.curse + dir, 0, this.maxCurse);
+    const next = Phaser.Math.Clamp(this.curse + dir, 0, this.maxCurse);
+    if (next !== this.curse) Sound.play('uiClick');
+    this.curse = next;
     this.registry.set(REGISTRY.CURSE, this.curse);
     if (this.curseLabel) {
       this.curseLabel.setText(this.curseText());
@@ -658,6 +692,7 @@ export class MenuScene extends Phaser.Scene {
   /** Fade out and open the meta shop (guard while the guide is open). */
   private openShop(): void {
     if (this.help?.isVisible()) return;
+    Sound.play('uiClick');
     this.input.enabled = false;
     this.cameras.main.fadeOut(280, 7, 7, 12);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
@@ -667,6 +702,7 @@ export class MenuScene extends Phaser.Scene {
 
   private move(dir: number): void {
     if (this.help?.isVisible()) return;
+    Sound.play('uiClick');
     const n = CHARACTERS.length;
     this.selected = (this.selected + dir + n) % n;
     this.refreshSelection();
@@ -752,9 +788,11 @@ export class MenuScene extends Phaser.Scene {
     const char = CHARACTERS[this.selected];
     // Block starting a run with a character that hasn't been unlocked yet.
     if (!MetaState.isCharacterUnlocked(char.id)) {
+      Sound.play('uiDenied');
       this.flashLockedHint();
       return;
     }
+    Sound.play('uiConfirm');
     this.input.enabled = false;
     this.cameras.main.fadeOut(320, 7, 7, 12);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {

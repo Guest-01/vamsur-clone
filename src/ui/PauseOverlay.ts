@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SCENES } from '../types';
 import type { OwnedWeaponView, OwnedItemView, IconRef } from '../types';
 import { GAME, COLORS, DEPTH } from '../config/balance';
+import { Sound } from '../audio/Sound';
 
 /** Snapshot of the current run state used to render the pause summary. */
 export interface PauseSummary {
@@ -143,6 +144,8 @@ export class PauseOverlay {
   /** Resume the game (button + ESC both route here). */
   resume(): void {
     if (!this.visible) return;
+    // The button's own click already played; the rate limiter coalesces them.
+    Sound.play('uiClick');
     this.hide();
     this.onResume();
   }
@@ -332,6 +335,7 @@ export class PauseOverlay {
     c.add(zone);
 
     zone.on('pointerover', () => {
+      Sound.play('uiHover');
       draw(true);
       scene.tweens.add({ targets: c, scale: 1.05, duration: 100, ease: 'Quad.Out' });
     });
@@ -339,7 +343,10 @@ export class PauseOverlay {
       draw(false);
       scene.tweens.add({ targets: c, scale: 1, duration: 100, ease: 'Quad.Out' });
     });
-    zone.on('pointerdown', onClick);
+    zone.on('pointerdown', () => {
+      Sound.play('uiClick');
+      onClick();
+    });
 
     return c;
   }

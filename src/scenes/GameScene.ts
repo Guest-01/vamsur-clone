@@ -31,6 +31,8 @@ import { createBaseStats, recomputeStats } from '../systems/stats';
 import { getCharacter } from '../content/characters';
 import { WEAPONS } from '../content/weapons';
 import { MetaState } from '../state/MetaState';
+import { Sound } from '../audio/Sound';
+import { Music } from '../audio/Music';
 
 // The integrator imports the concrete entity/system classes and wires them
 // together. (Pool-owning systems also import their own pooled entity class —
@@ -233,8 +235,17 @@ export class GameScene extends Phaser.Scene {
       queueLevelUp: () => this.queueLevelUp(),
       shakeCamera: (i, d) => this.shakeCamera(i, d),
       popText: (x, y, text, color) => this.popText(x, y, text, color),
-      hitSparkAt: (x, y) => this.sparkFx.explode(4, x, y),
-      deathPoofAt: (x, y) => this.poofFx.explode(8, x, y),
+      // The FX helpers double as the audio hooks: hitSparkAt fires on every
+      // weapon hit and deathPoofAt on every kill, so the (rate-limited) sounds
+      // ride along without touching the entities.
+      hitSparkAt: (x, y) => {
+        this.sparkFx.explode(4, x, y);
+        Sound.play('hit');
+      },
+      deathPoofAt: (x, y) => {
+        this.poofFx.explode(8, x, y);
+        Sound.play('enemyDie');
+      },
       collectBurstAt: (x, y, tint, quantity) => {
         this.burstFx.setParticleTint(tint);
         this.burstFx.explode(quantity ?? 6, x, y);
@@ -309,6 +320,9 @@ export class GameScene extends Phaser.Scene {
 
     // Clean up cross-scene listeners when this scene shuts down (retry/quit).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
+
+    // 16) Battle music for the run (procedural loop; stopped in endRun).
+    Music.play('game');
   }
 
   /* ------------------------------------------------------------------ */
@@ -582,6 +596,7 @@ export class GameScene extends Phaser.Scene {
     // Golden flash for the "time freeze" beat (the overlay also dims the screen
     // and shows its own golden glow).
     this.cameras.main.flash(150, 240, 216, 150, true);
+    Sound.play('levelup');
 
     // Pause only THIS scene; the UI scene stays live to handle the choice.
     this.scene.pause();
@@ -625,6 +640,7 @@ export class GameScene extends Phaser.Scene {
     if (this.run.gameOver || this.showingLevelUp) return;
     if (this.scene.isPaused(SCENES.GAME)) return;
 
+    Sound.play('uiClick');
     this.events.emit(EVENTS.PAUSE_TOGGLED, { paused: true });
     this.scene.pause();
     // UIScene owns ESC-to-resume (it stays active) and calls scene.resume.
@@ -645,6 +661,7 @@ export class GameScene extends Phaser.Scene {
       this.player.heal(0); // emit HP_CHANGED via the player's own path
 
       // Revive nova: clear nearby enemies-of-the-screen feel + big juice.
+      Sound.play('revive');
       this.shakeCamera(0.012, 320);
       const nova = this.add
         .image(this.player.x, this.player.y, TEXTURES.RING)
@@ -678,6 +695,11 @@ export class GameScene extends Phaser.Scene {
     if (this.run.gameOver) return;
     this.run.gameOver = true;
     this.run.victory = victory;
+
+    // Silence the battle loop, then the outcome sting (both survive the scene
+    // transition — they live on the AudioContext, not the scene).
+    Music.stop();
+    Sound.play(victory ? 'victory' : 'defeat');
 
     const weapons: OwnedWeaponView[] = this.ctx.weaponSystem.getOwned().map((w) => ({
       id: w.id,

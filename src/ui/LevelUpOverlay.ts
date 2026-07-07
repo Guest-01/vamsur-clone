@@ -3,6 +3,7 @@ import { SCENES, EVENTS } from '../types';
 import type { UpgradeOption, IconRef } from '../types';
 import { TEXTURES } from '../config/assets';
 import { COLORS, GAME, DEPTH } from '../config/balance';
+import { Sound } from '../audio/Sound';
 
 /**
  * Level-up choice overlay built inside the (never-paused) UIScene. The GameScene
@@ -239,6 +240,7 @@ export class LevelUpOverlay {
    */
   private requestReroll(): void {
     if (!this.visible || this.locked || this.rerollsLeft <= 0) return;
+    Sound.play('reroll');
     this.gameEvents.emit(EVENTS.REROLL_REQUESTED, {});
   }
 
@@ -368,7 +370,10 @@ export class LevelUpOverlay {
     container.add(zone);
 
     zone.on('pointerover', () => {
-      if (!this.locked) this.highlight(index);
+      if (!this.locked && this.selectedIndex !== index) {
+        Sound.play('uiHover');
+        this.highlight(index);
+      }
     });
     zone.on('pointerdown', () => this.select(index));
 
@@ -472,6 +477,7 @@ export class LevelUpOverlay {
     if (this.locked || !this.visible) return;
     if (index < 0 || index >= this.options.length) return;
     this.locked = true;
+    Sound.play('uiConfirm');
     this.highlight(index);
 
     const option = this.options[index];
@@ -524,11 +530,13 @@ export class LevelUpOverlay {
         case 'ArrowLeft':
         case 'a':
         case 'A':
+          if (this.selectedIndex > 0) Sound.play('uiHover');
           this.highlight(Math.max(0, this.selectedIndex - 1));
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
+          if (this.selectedIndex < this.cards.length - 1) Sound.play('uiHover');
           this.highlight(Math.min(this.cards.length - 1, this.selectedIndex + 1));
           break;
         case 'Enter':

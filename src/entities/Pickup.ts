@@ -9,6 +9,7 @@ import Phaser from 'phaser';
 import type { GameContext, PickupLike, PickupType } from '../types';
 import { TEXTURES, FRAMES } from '../config/assets';
 import { DEPTH, COLORS, GEM_TIERS, PICKUP, ENTITY_SCALE } from '../config/balance';
+import { Sound } from '../audio/Sound';
 
 export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
   /** the kind of pickup this currently is (set each spawn) */
@@ -276,21 +277,26 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite implements PickupLike {
     switch (this.pickupType) {
       case 'xp':
         ctx.addXp(this.value);
+        Sound.play('xp');
         break;
       case 'health':
         ctx.player.heal(PICKUP.HEALTH_HEAL);
         ctx.popText(this.x, this.y - 6, `+${PICKUP.HEALTH_HEAL}`, COLORS.HP_BAR);
+        Sound.play('heal');
         break;
       case 'gold':
         ctx.addGold(PICKUP.GOLD_VALUE);
+        Sound.play('coin');
         break;
       case 'magnet':
         this.vacuumAllGems();
+        Sound.play('magnet');
         break;
       case 'chest':
         // A chest grants a burst of level-up screens.
         for (let i = 0; i < PICKUP.CHEST_ROLLS; i++) ctx.queueLevelUp();
         ctx.shakeCamera(0.004, 160);
+        Sound.play('chest');
         break;
     }
 
