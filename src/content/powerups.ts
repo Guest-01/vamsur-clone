@@ -10,11 +10,13 @@ const gen = (texture: string) => ({ texture, frame: -1 });
  * `systems/stats.ts` + `state/MetaState.ts`), so they make all future runs
  * stronger. Cost of the next level = `costPerLevel * (currentLevel + 1)`.
  *
- * Curated to 13 entries (was 18): weak "mini copies" of in-run items
- * (projectile speed, duration, dodge, magnet, regen) were cut, and the two
- * crit power-ups were merged into Deadly Arts, so every purchase here feels
- * distinct from what a run already offers. Stale ids in old saves are pruned
- * on load by MetaState.
+ * Curated to 10 entries (was 18): weak "mini copies" of in-run items
+ * (projectile speed, duration, dodge, magnet, regen) were cut, the two crit
+ * power-ups were merged into Deadly Arts, and the three abstract economy/meta
+ * stats (fortune/luck, growth/xpGain, greed/gold) were dropped — their effect
+ * was opaque or self-referential and they padded the grid without feeling
+ * distinct from what a run already offers. Stale ids in old saves are pruned on
+ * load by MetaState, so removing an entry here safely retires it.
  */
 export const POWERUPS: Record<string, PowerUpDef> = {
   vitality: {
@@ -81,39 +83,6 @@ export const POWERUPS: Record<string, PowerUpDef> = {
     costPerLevel: 45,
     apply: (s, lvl) => {
       s.area += 0.06 * lvl;
-    },
-  },
-  growth: {
-    id: 'growth',
-    name: '성장',
-    description: '시작 경험치 획득 +5% / 레벨',
-    icon: gen(TEXTURES.GEM_L),
-    maxLevel: 5,
-    costPerLevel: 45,
-    apply: (s, lvl) => {
-      s.xpGain += 0.05 * lvl;
-    },
-  },
-  greed: {
-    id: 'greed',
-    name: '탐욕',
-    description: '시작 골드 획득 +12% / 레벨',
-    icon: gen(TEXTURES.ICON_COIN),
-    maxLevel: 5,
-    costPerLevel: 35,
-    apply: (s, lvl) => {
-      s.greed += 0.12 * lvl;
-    },
-  },
-  fortune: {
-    id: 'fortune',
-    name: '행운',
-    description: '시작 행운 +5% / 레벨',
-    icon: gen(TEXTURES.ICON_CLOVER),
-    maxLevel: 3,
-    costPerLevel: 45,
-    apply: (s, lvl) => {
-      s.luck += 0.05 * lvl;
     },
   },
   deadlyArts: {

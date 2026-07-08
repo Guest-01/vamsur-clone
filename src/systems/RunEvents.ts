@@ -44,8 +44,14 @@ const SCHEDULE: ScheduledEvent[] = [
   { id: 'goldRush', startSec: 415, durationSec: 25 },
 ];
 
-/** ms between bonus-coin drops during a gold rush. */
-const COIN_DRIP_MS = 650;
+/**
+ * ms between bonus-coin drops during a gold rush. Raised from 650 (~38 coins per
+ * 25s window) to 1200 (~20): the drip was a large, skill-independent floor on
+ * run income — roughly half of a moderate run's gold came from the two rushes'
+ * free coin rain regardless of how well the player fought. Halving it shifts the
+ * economy back toward kill/champion drops without gutting the event's payout.
+ */
+const COIN_DRIP_MS = 1200;
 
 export class RunEvents {
   private readonly ctx: GameContext;

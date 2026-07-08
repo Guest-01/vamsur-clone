@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { SHEET, TEXTURES } from '../config/assets';
-import { COLORS, GAME } from '../config/balance';
-import { SCENES } from '../types';
+import { COLORS, GAME, SCORE } from '../config/balance';
+import { SCENES, REGISTRY } from '../types';
 import { TextureFactory } from '../gfx/TextureFactory';
 
 /**
@@ -49,6 +49,8 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     TextureFactory.generateAll(this);
 
+    this.migrateScoreFormula();
+
     // remove the static HTML loader now that the canvas is live
     const loader = document.getElementById('boot-loader');
     if (loader) loader.style.display = 'none';
@@ -61,5 +63,29 @@ export class BootScene extends Phaser.Scene {
     }
 
     this.scene.start(SCENES.MENU);
+  }
+
+  /**
+   * One-time best-score migration. When the score formula is rescaled its
+   * FORMULA_VERSION is bumped, and a record set under the old scale is no longer
+   * comparable (an old ~50k victory could never be beaten by a new ~5k one). So
+   * the first boot whose stored version is older wipes BEST_SCORE and stamps the
+   * new version — after which the version matches and this never fires again, so
+   * the record is reset exactly once, not every launch. BEST_TIME is untouched
+   * (survival time didn't change scale). Runs at boot before the menu reads the
+   * record; the in-memory registry mirror starts empty each page load, so
+   * clearing localStorage alone is sufficient.
+   */
+  private migrateScoreFormula(): void {
+    try {
+      const raw = window.localStorage.getItem(REGISTRY.SCORE_FORMULA_VER);
+      const stored = raw !== null ? parseInt(raw, 10) : 1; // absent = pre-versioning (v1)
+      if (!Number.isFinite(stored) || stored < SCORE.FORMULA_VERSION) {
+        window.localStorage.removeItem(REGISTRY.BEST_SCORE);
+        window.localStorage.setItem(REGISTRY.SCORE_FORMULA_VER, String(SCORE.FORMULA_VERSION));
+      }
+    } catch {
+      /* storage unavailable — nothing persisted, nothing to migrate */
+    }
   }
 }

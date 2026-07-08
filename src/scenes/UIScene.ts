@@ -8,7 +8,7 @@ import type {
   PlayerStats,
 } from '../types';
 import { TEXTURES, FRAMES } from '../config/assets';
-import { GAME, COLORS, DEPTH, DEFAULT_STATS } from '../config/balance';
+import { GAME, COLORS, DEPTH, DEFAULT_STATS, PLAYER, RUN } from '../config/balance';
 import { getCharacter } from '../content/characters';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { PauseOverlay } from '../ui/PauseOverlay';
@@ -29,6 +29,7 @@ interface HudState {
   level: number;
   kills: number;
   gold: number;
+  score: number;
   elapsedMs: number;
   weapons: OwnedWeaponView[];
   items: OwnedItemView[];
@@ -62,6 +63,7 @@ export class UIScene extends Phaser.Scene {
     level: 1,
     kills: 0,
     gold: 0,
+    score: 0,
     elapsedMs: 0,
     weapons: [],
     items: [],
@@ -75,6 +77,9 @@ export class UIScene extends Phaser.Scene {
   private levelBadgeText!: Phaser.GameObjects.Text;
 
   private timerText!: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text;
+  /** timer switched to the gold overtime style (one-shot on 8:00) */
+  private overtimeStyled = false;
 
   private hpBarFill!: Phaser.GameObjects.Rectangle;
   private hpBarMaxWidth = 300;
@@ -117,6 +122,10 @@ export class UIScene extends Phaser.Scene {
   private levelUpOverlay!: LevelUpOverlay;
   private pauseOverlay!: PauseOverlay;
   private helpOverlay!: HelpOverlay;
+  /** the "results or overtime?" modal shown when 8:00 is survived */
+  private victoryChoice?: Phaser.GameObjects.Container;
+  /** true while the revive freeze beat is playing (GameScene is paused) */
+  private reviveFreeze = false;
 
   private escKey?: Phaser.Input.Keyboard.Key;
   /** timestamp the pause overlay opened; gates ESC-resume from same-frame race. */
@@ -140,6 +149,7 @@ export class UIScene extends Phaser.Scene {
         level: snap.level,
         kills: snap.kills,
         gold: snap.gold,
+        score: snap.score ?? 0,
         elapsedMs: snap.elapsedMs,
         weapons: snap.weapons ?? [],
         items: snap.items ?? [],
@@ -183,6 +193,7 @@ export class UIScene extends Phaser.Scene {
     this.refreshHp(false);
     this.killsText.setText(`${this.state.kills}`);
     this.goldText.setText(`${this.state.gold}`);
+    this.refreshScore();
     this.refreshTimer();
     this.rebuildTray();
 
@@ -233,7 +244,8 @@ export class UIScene extends Phaser.Scene {
     if (
       this.levelUpOverlay.isVisible() ||
       this.pauseOverlay.isVisible() ||
-      this.helpOverlay.isVisible()
+      this.helpOverlay.isVisible() ||
+      this.victoryChoice
     )
       return;
 
@@ -246,8 +258,9 @@ export class UIScene extends Phaser.Scene {
     this.xpBarHighlight.width = w;
     this.refreshXp(false);
 
-    // centred timer
+    // centred timer + score
     this.timerText.x = w / 2;
+    this.scoreText.x = w / 2;
 
     // right-anchored kills/gold group
     this.topRight.x = w;
@@ -273,6 +286,9 @@ export class UIScene extends Phaser.Scene {
     g.on(EVENTS.XP_CHANGED, this.onXpChanged, this);
     g.on(EVENTS.KILLS_CHANGED, this.onKillsChanged, this);
     g.on(EVENTS.GOLD_CHANGED, this.onGoldChanged, this);
+    g.on(EVENTS.SCORE_CHANGED, this.onScoreChanged, this);
+    g.on(EVENTS.REVIVED, this.onRevived, this);
+    g.on(EVENTS.VICTORY_CHOICE, this.onVictoryChoice, this);
     g.on(EVENTS.TIMER, this.onTimer, this);
     g.on(EVENTS.WEAPONS_CHANGED, this.onWeaponsChanged, this);
     g.on(EVENTS.ITEMS_CHANGED, this.onItemsChanged, this);
@@ -292,6 +308,9 @@ export class UIScene extends Phaser.Scene {
     g.off(EVENTS.XP_CHANGED, this.onXpChanged, this);
     g.off(EVENTS.KILLS_CHANGED, this.onKillsChanged, this);
     g.off(EVENTS.GOLD_CHANGED, this.onGoldChanged, this);
+    g.off(EVENTS.SCORE_CHANGED, this.onScoreChanged, this);
+    g.off(EVENTS.REVIVED, this.onRevived, this);
+    g.off(EVENTS.VICTORY_CHOICE, this.onVictoryChoice, this);
     g.off(EVENTS.TIMER, this.onTimer, this);
     g.off(EVENTS.WEAPONS_CHANGED, this.onWeaponsChanged, this);
     g.off(EVENTS.ITEMS_CHANGED, this.onItemsChanged, this);
@@ -308,6 +327,8 @@ export class UIScene extends Phaser.Scene {
     this.levelUpOverlay?.destroy();
     this.pauseOverlay?.destroy();
     this.helpOverlay?.destroy();
+    this.victoryChoice?.destroy();
+    this.victoryChoice = undefined;
     this.joystick?.destroy();
     this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
   }
@@ -341,6 +362,13 @@ export class UIScene extends Phaser.Scene {
     this.state.gold = p.gold;
     this.goldText.setText(`${p.gold}`);
     this.bump(this.goldText);
+  }
+
+  // Score updates constantly (time term ticks 4x/sec) — no bump tween, the
+  // motion of the number itself is the feedback.
+  private onScoreChanged(p: { score: number }): void {
+    this.state.score = p.score;
+    this.refreshScore();
   }
 
   private onTimer(p: { elapsedMs: number }): void {
@@ -390,6 +418,196 @@ export class UIScene extends Phaser.Scene {
     } else {
       this.pauseOverlay.hide();
     }
+  }
+
+  /* --------------------------------------------------------------- */
+  /* Revive freeze beat                                              */
+  /* --------------------------------------------------------------- */
+
+  /**
+   * game -> UI: an auto-revive fired. The GameScene just paused itself; this
+   * scene (never paused) plays a short golden beat — flash, big "부활", the
+   * remaining-charges line — then resumes the world.
+   */
+  private onRevived(p: { revivesLeft: number }): void {
+    if (this.reviveFreeze) return;
+    this.reviveFreeze = true;
+    const w = this.scale.width;
+    const cy = GAME.HEIGHT / 2;
+    const depth = HUD_DEPTH + 25;
+
+    // golden full-screen flash that decays over the freeze
+    const flash = this.add
+      .rectangle(w / 2, cy, w, GAME.HEIGHT, COLORS.GOLD, 1)
+      .setScrollFactor(0)
+      .setDepth(depth)
+      .setAlpha(0.38);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: PLAYER.REVIVE_FREEZE_MS,
+      ease: 'Quad.easeOut',
+    });
+
+    // big "부활" pop (the player sits at screen centre — camera-followed)
+    const serif = 'Cinzel, "Noto Serif KR", serif';
+    const title = this.add
+      .text(w / 2, cy - 96, '부 활', {
+        fontFamily: serif,
+        fontStyle: '700',
+        fontSize: '84px',
+        color: '#f0d896',
+        stroke: '#1a1208',
+        strokeThickness: 10,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 1)
+      .setScale(0.5)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: title,
+      scale: 1,
+      alpha: 1,
+      duration: 260,
+      ease: 'Back.Out',
+    });
+
+    const sub = this.add
+      .text(w / 2, cy - 30, `남은 부활 ${p.revivesLeft}회`, {
+        fontFamily: serif,
+        fontStyle: '700',
+        fontSize: '26px',
+        color: '#d8c9a0',
+        stroke: '#000000',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 1)
+      .setAlpha(0);
+    this.tweens.add({ targets: sub, alpha: 0.95, duration: 260, delay: 140 });
+
+    // hold, fade out, resume the world
+    this.tweens.add({
+      targets: [title, sub],
+      alpha: 0,
+      delay: PLAYER.REVIVE_FREEZE_MS - 240,
+      duration: 240,
+      ease: 'Quad.In',
+    });
+    this.time.delayedCall(PLAYER.REVIVE_FREEZE_MS, () => {
+      flash.destroy();
+      title.destroy();
+      sub.destroy();
+      this.reviveFreeze = false;
+      // resume unless some other modal took over the pause meanwhile
+      if (
+        !this.levelUpOverlay.isVisible() &&
+        !this.pauseOverlay.isVisible() &&
+        !this.victoryChoice
+      ) {
+        this.scene.resume(SCENES.GAME);
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------- */
+  /* Victory choice (8:00 survived → results or overtime)            */
+  /* --------------------------------------------------------------- */
+
+  /** game -> UI: the 8:00 mark was survived; offer results vs overtime. */
+  private onVictoryChoice(): void {
+    if (this.victoryChoice) return; // already showing
+    const w = this.scale.width;
+    const cy = GAME.HEIGHT / 2;
+    const depth = HUD_DEPTH + 25; // above every HUD widget and overlay
+
+    const c = this.add.container(0, 0).setScrollFactor(0).setDepth(depth);
+    this.victoryChoice = c;
+
+    // dim + panel
+    c.add(this.add.rectangle(w / 2, cy, w, GAME.HEIGHT, 0x000000, 0.62));
+    const pw = 880;
+    const ph = 420;
+    c.add(
+      this.add
+        .rectangle(w / 2, cy, pw, ph, COLORS.PANEL, 0.97)
+        .setStrokeStyle(6, COLORS.GOLD)
+    );
+
+    const serif = 'Cinzel, "Noto Serif KR", serif';
+    c.add(
+      this.add
+        .text(w / 2, cy - 128, '승리!', {
+          fontFamily: serif,
+          fontStyle: '700',
+          fontSize: '72px',
+          color: '#f0d896',
+        })
+        .setOrigin(0.5)
+        .setShadow(0, 4, '#000000', 16, true, true)
+    );
+    c.add(
+      this.add
+        .text(w / 2, cy - 56, '영원한 밤을 견뎌냈다 — 승리는 확정되었다.', {
+          fontFamily: serif,
+          fontSize: '26px',
+          color: '#e8e0d0',
+        })
+        .setOrigin(0.5)
+    );
+    c.add(
+      this.add
+        .text(w / 2, cy - 16, '오버타임: 적이 급격히 강해지고, 점수만이 계속 쌓인다.', {
+          fontFamily: serif,
+          fontSize: '20px',
+          color: '#8a8296',
+        })
+        .setOrigin(0.5)
+    );
+
+    const mkButton = (x: number, label: string, accent: number, cb: () => void): void => {
+      const bw = 340;
+      const bh = 84;
+      const bg = this.add
+        .rectangle(x, cy + 96, bw, bh, COLORS.PANEL_LIGHT, 1)
+        .setStrokeStyle(4, accent)
+        .setInteractive({ useHandCursor: true });
+      const txt = this.add
+        .text(x, cy + 96, label, {
+          fontFamily: serif,
+          fontStyle: '700',
+          fontSize: '30px',
+          color: '#e8e0d0',
+        })
+        .setOrigin(0.5);
+      bg.on('pointerover', () => {
+        Sound.play('uiHover');
+        bg.setFillStyle(accent, 0.28);
+        txt.setColor('#f0d896');
+      });
+      bg.on('pointerout', () => {
+        bg.setFillStyle(COLORS.PANEL_LIGHT, 1);
+        txt.setColor('#e8e0d0');
+      });
+      bg.on('pointerdown', cb);
+      // clickable bg added before txt; container input follows add order, and
+      // the interactive rect is beneath its own label only visually.
+      c.add(bg);
+      c.add(txt);
+    };
+
+    mkButton(w / 2 - 192, '결과 확인', COLORS.GOLD, () => this.decideVictory(false));
+    mkButton(w / 2 + 192, '심연으로 †', COLORS.BLOOD_LIGHT, () => this.decideVictory(true));
+  }
+
+  private decideVictory(continueRun: boolean): void {
+    if (!this.victoryChoice) return;
+    Sound.play('uiConfirm');
+    this.victoryChoice.destroy();
+    this.victoryChoice = undefined;
+    this.gameScene.events.emit(EVENTS.VICTORY_DECIDED, { continueRun });
   }
 
   /** A timed run event started/ended: banner + ambient tint. */
@@ -465,6 +683,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private onEsc(): void {
+    // The victory-choice modal and the revive freeze block ESC entirely.
+    if (this.victoryChoice || this.reviveFreeze) return;
     // Level-up screen blocks pausing entirely (choice must be made first).
     if (this.levelUpOverlay.isVisible()) return;
     // The guide (opened from the pause screen) closes first, back to the pause.
@@ -557,7 +777,7 @@ export class UIScene extends Phaser.Scene {
       .setDepth(HUD_DEPTH + 2);
   }
 
-  /** Large mm:ss timer centred just below the XP bar. */
+  /** Large mm:ss timer centred just below the XP bar, live score under it. */
   private buildTimer(): void {
     this.timerText = this.add
       .text(this.scale.width / 2, 60, '00:00', {
@@ -566,6 +786,19 @@ export class UIScene extends Phaser.Scene {
         color: '#e8e0d0',
         stroke: '#000000',
         strokeThickness: 8,
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH + 2);
+
+    this.overtimeStyled = false;
+    this.scoreText = this.add
+      .text(this.scale.width / 2, 112, 'SCORE 0', {
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
+        fontSize: '20px',
+        color: '#f0d896',
+        stroke: '#000000',
+        strokeThickness: 6,
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
@@ -834,8 +1067,15 @@ export class UIScene extends Phaser.Scene {
 
   /** Tap handler for the on-screen pause button — mirrors the ESC/open path. */
   private onPauseButton(): void {
-    // Do nothing if a modal is already up (level-up choice / already paused).
-    if (this.levelUpOverlay.isVisible() || this.pauseOverlay.isVisible()) return;
+    // Do nothing if a modal is already up (level-up / victory choice / revive
+    // freeze / paused).
+    if (
+      this.victoryChoice ||
+      this.reviveFreeze ||
+      this.levelUpOverlay.isVisible() ||
+      this.pauseOverlay.isVisible()
+    )
+      return;
     Sound.play('uiClick');
     this.scene.pause(SCENES.GAME);
     this.pauseOpenedAt = this.time.now;
@@ -946,6 +1186,16 @@ export class UIScene extends Phaser.Scene {
     const m = Math.floor(total / 60);
     const s = total % 60;
     this.timerText.setText(`${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
+
+    // Overtime: the timer turns gold past the victory mark (one-shot restyle).
+    if (!this.overtimeStyled && this.state.elapsedMs >= RUN.SURVIVE_MS) {
+      this.overtimeStyled = true;
+      this.timerText.setColor('#f0d896');
+    }
+  }
+
+  private refreshScore(): void {
+    this.scoreText.setText(`SCORE ${this.state.score.toLocaleString()}`);
   }
 
   /** Rebuild the bottom-left tray of weapon then item icon slots. */
@@ -1048,6 +1298,7 @@ export class UIScene extends Phaser.Scene {
       level: this.state.level,
       kills: this.state.kills,
       gold: this.state.gold,
+      score: this.state.score,
       elapsedMs: this.state.elapsedMs,
       hp: this.state.hp,
       maxHp: this.state.maxHp,

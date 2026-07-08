@@ -25,6 +25,7 @@ import {
   curseMults,
   damageScale,
   hpScale,
+  overtimeMults,
   speedScale,
 } from '../config/balance';
 
@@ -67,6 +68,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
   private hpBar?: Phaser.GameObjects.Container;
   private hpBarFill?: Phaser.GameObjects.Rectangle;
   private hpBarW = 0;
+  /** role the current hpBar was built for (boss bars are wider + red) */
+  private hpBarForBoss = false;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0, TEXTURES.SPRITES, 0);
@@ -106,12 +109,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     const r = (this.width / 2) * 0.7;
     this.setCircle(r, this.width / 2 - r, this.height / 2 - r);
 
-    // time-scaled combat stats (× the run's curse-contract multipliers)
+    // time-scaled combat stats (× the run's curse-contract multipliers,
+    // × the post-victory overtime ramp — all-1 before 8:00)
     const elapsed = ctx.run.elapsedMs;
     const curse = curseMults(ctx.run.curse);
-    this.maxHp = def.baseHp * hpScale(elapsed) * curse.enemyHp;
+    const ot = overtimeMults(elapsed);
+    this.maxHp = def.baseHp * hpScale(elapsed) * curse.enemyHp * ot.hp;
     this.hp = this.maxHp;
-    this.contactDamage = def.contactDamage * damageScale(elapsed) * curse.enemyDmg;
+    this.contactDamage = def.contactDamage * damageScale(elapsed) * curse.enemyDmg * ot.dmg;
     this.speed = def.moveSpeed * speedScale(elapsed) * curse.enemySpeed;
 
     // reset transient state
@@ -280,7 +285,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     const x = this.x;
     const y = this.y;
 
-    ctx.addKill();
+    ctx.addKill(def);
     ctx.spawnXpGem(x, y, def.xp);
 
     if (ctx.rng.frac() < def.goldChance) ctx.spawnPickup(x, y, 'gold');
@@ -295,7 +300,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
 
     if (def.isBoss) {
       // big, screen-filling death beat for the boss.
-      ctx.shakeCamera(0.02, 600);
+      ctx.shakeCamera(0.015, 600);
       this.flashScreen(x, y);
     }
 
@@ -384,9 +389,19 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
   }
 
   private ensureHpBar(): void {
+    // Pooled instances swap roles (elite -> boss -> champion...); the bar's
+    // geometry/colour are baked at creation, so rebuild it on a role change or
+    // a recycled boss would keep the small mob bar (and vice versa).
+    const wantBoss = this.def.isBoss === true;
+    if (this.hpBar && this.hpBarForBoss !== wantBoss) {
+      this.hpBar.destroy();
+      this.hpBar = undefined;
+      this.hpBarFill = undefined;
+    }
     if (!this.hpBar) {
-      this.hpBarW = this.def.isBoss ? 64 : 36;
-      const h = this.def.isBoss ? 6 : 4;
+      this.hpBarForBoss = wantBoss;
+      this.hpBarW = wantBoss ? 64 : 36;
+      const h = wantBoss ? 6 : 4;
       const track = this.scene.add.rectangle(0, 0, this.hpBarW + 2, h + 2, COLORS.PANEL, 0.85);
       track.setStrokeStyle(1, 0x000000, 0.9);
       const fill = this.scene.add.rectangle(
@@ -394,7 +409,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
         0,
         this.hpBarW,
         h,
-        this.def.isBoss ? COLORS.BLOOD : COLORS.HP_BAR
+        wantBoss ? COLORS.BLOOD : COLORS.HP_BAR
       );
       fill.setOrigin(0, 0.5);
       this.hpBarFill = fill;

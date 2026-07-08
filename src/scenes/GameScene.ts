@@ -9,11 +9,13 @@ import {
   type PlayerStats,
   type RunState,
   type RunSummary,
+  type ScoreBreakdown,
   type PickupType,
   type UpgradeOption,
   type OwnedWeaponView,
   type OwnedItemView,
   type WeaponDamageView,
+  type EnemyDef,
   type EnemySprite,
 } from '../types';
 import { TEXTURES } from '../config/assets';
@@ -21,7 +23,9 @@ import {
   GAME,
   DEPTH,
   COLORS,
+  PLAYER,
   RUN,
+  SCORE,
   SPAWN,
   CAMERA_ZOOM,
   curseMults,
@@ -102,6 +106,14 @@ export class GameScene extends Phaser.Scene {
   // --- HUD timer throttle -------------------------------------------------
   private lastTimerEmit = 0;
 
+  // --- camera-shake gate (see shakeCamera) ---------------------------------
+  /** scene time when the currently running shake ends */
+  private shakeUntil = 0;
+  /** intensity of the currently running shake */
+  private shakeIntensity = 0;
+  /** last time a small rumble fired (rate limit) */
+  private lastSmallShakeAt = 0;
+
   constructor() {
     super(SCENES.GAME);
   }
@@ -114,6 +126,9 @@ export class GameScene extends Phaser.Scene {
     this.showingLevelUp = false;
     this.lastTimerEmit = 0;
     this.popPool = [];
+    this.shakeUntil = 0;
+    this.shakeIntensity = 0;
+    this.lastSmallShakeAt = 0;
   }
 
   create(): void {
@@ -192,6 +207,9 @@ export class GameScene extends Phaser.Scene {
       xpToNext: xpForLevel(1),
       kills: 0,
       gold: 0,
+      killScore: 0,
+      victoryAchieved: false,
+      revivesUsed: 0,
       ownedItems: new Map(),
       rerollsLeft: 0,
       curse: this.curse,
@@ -230,7 +248,7 @@ export class GameScene extends Phaser.Scene {
       spawnPickup: (x, y, type, value) => this.spawnPickup(x, y, type, value),
       addXp: (amount) => this.ctx.experienceSystem.addXp(amount),
       addGold: (amount) => this.addGold(amount),
-      addKill: () => this.addKill(),
+      addKill: (def) => this.addKill(def),
       recomputeStats: () => this.recomputeStats(),
       queueLevelUp: () => this.queueLevelUp(),
       shakeCamera: (i, d) => this.shakeCamera(i, d),
@@ -309,6 +327,11 @@ export class GameScene extends Phaser.Scene {
       this
     );
     this.events.on(EVENTS.REROLL_REQUESTED, this.onRerollRequested, this);
+    this.events.on(
+      EVENTS.VICTORY_DECIDED,
+      (p: { continueRun: boolean }) => this.onVictoryDecided(p.continueRun),
+      this
+    );
 
     // 15) Emit the initial HUD state on the next tick so the just-launched
     //     UIScene has had a chance to subscribe. (UIScene also pulls a
@@ -349,6 +372,8 @@ export class GameScene extends Phaser.Scene {
     if (run.elapsedMs - this.lastTimerEmit >= 250) {
       this.lastTimerEmit = run.elapsedMs;
       this.events.emit(EVENTS.TIMER, { elapsedMs: run.elapsedMs });
+      // score's time term ticks on the same cadence (kills emit immediately)
+      this.events.emit(EVENTS.SCORE_CHANGED, { score: this.currentScore() });
       this.emitChestDir();
     }
 
@@ -363,10 +388,36 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Victory: survived the full run.
-    if (run.elapsedMs >= RUN.SURVIVE_MS) {
-      this.endRun(true);
+    // Victory: survived the full run. The win is locked in immediately; the
+    // player then chooses between the results screen and overtime (endless).
+    if (run.elapsedMs >= RUN.SURVIVE_MS && !run.victoryAchieved) {
+      this.onVictoryReached();
     }
+  }
+
+  /**
+   * The 8:00 mark was survived. Record the victory NOW (an overtime death must
+   * not lose it), land the score bonus, and pause for the overtime choice —
+   * same pause pattern as the level-up screen (the UIScene stays live).
+   */
+  private onVictoryReached(): void {
+    this.run.victoryAchieved = true;
+    MetaState.recordVictory(this.run.curse);
+    Sound.play('victory');
+    this.events.emit(EVENTS.SCORE_CHANGED, { score: this.currentScore() });
+    this.events.emit(EVENTS.VICTORY_CHOICE, {});
+    this.scene.pause();
+  }
+
+  /** UI -> game: the overtime decision was made. */
+  private onVictoryDecided(continueRun: boolean): void {
+    this.scene.resume();
+    if (!continueRun) {
+      this.endRun(true);
+      return;
+    }
+    // Overtime: nothing to flip — the spawner and enemy stats read the ramp
+    // from overtimeMults(elapsedMs), which is >1 from this moment on.
   }
 
   /* ------------------------------------------------------------------ */
@@ -469,15 +520,49 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(EVENTS.GOLD_CHANGED, { gold: this.run.gold });
   }
 
-  /** kill counter + emit. */
-  private addKill(): void {
+  /** kill counter + per-enemy score + emits. */
+  private addKill(def: EnemyDef): void {
     this.run.kills++;
+    this.run.killScore += def.score;
     this.events.emit(EVENTS.KILLS_CHANGED, { kills: this.run.kills });
+    this.events.emit(EVENTS.SCORE_CHANGED, { score: this.currentScore() });
+  }
+
+  /**
+   * The pre-multiplier score terms + the curse multiplier (see balance.SCORE).
+   * The single source of truth for both the live score and the results-screen
+   * breakdown, so the two can never drift. Each term is rounded to an int so the
+   * displayed terms sum exactly to the pre-curse base.
+   */
+  private scoreTerms(): ScoreBreakdown {
+    const r = this.run;
+    return {
+      timePts: Math.round((r.elapsedMs / 1000) * SCORE.TIME_PER_SEC),
+      killPts: Math.round(r.killScore * SCORE.KILL_WEIGHT),
+      levelPts: (r.level - 1) * SCORE.LEVEL_PTS,
+      victoryPts: r.victoryAchieved ? SCORE.VICTORY_BONUS : 0,
+      curseMult: 1 + SCORE.CURSE_BONUS * r.curse,
+    };
+  }
+
+  /**
+   * The live run score. Kills are the main term; time/level tick along via the
+   * throttled timer emit, and the victory bonus lands the moment the 8:00 mark
+   * is survived.
+   */
+  private currentScore(): number {
+    const t = this.scoreTerms();
+    const base = t.timePts + t.killPts + t.levelPts + t.victoryPts;
+    return Math.round(base * t.curseMult);
   }
 
   /** Recompute the shared stat block in place, then keep hp sane. */
   private recomputeStats(): void {
     recomputeStats(this.stats, this.character, this.run.ownedItems);
+    // Revives are the one CONSUMABLE stat: the rebuild above re-grants them
+    // from the definitions, so spent charges must be subtracted again or every
+    // level-up would refund the used revives.
+    this.stats.revives = Math.max(0, this.stats.revives - this.run.revivesUsed);
     // Track maxHp growth for the player's clamp/top-up (player owns its hp).
     if (this.player) {
       this.player.maxHp = this.stats.maxHp;
@@ -486,8 +571,30 @@ export class GameScene extends Phaser.Scene {
     // Callers emit HP/ITEMS/etc. as appropriate.
   }
 
+  /**
+   * Central shake gate. Two rules keep the horde chaos readable:
+   *  - a request weaker than (or equal to) the shake still running is dropped,
+   *    so chained small hits can't extend the rumble forever;
+   *  - small rumbles (≤ SMALL_SHAKE) also rate-limit themselves, so mine pops
+   *    + player hits can't merge into a continuous jitter.
+   * A stronger request always wins and force-restarts the effect.
+   */
   private shakeCamera(intensity?: number, durationMs?: number): void {
-    this.cameras.main.shake(durationMs ?? 150, intensity ?? 0.005);
+    const SMALL_SHAKE = 0.005;
+    const SMALL_MIN_GAP_MS = 250;
+    const i = intensity ?? 0.005;
+    const d = durationMs ?? 150;
+    const now = this.time.now;
+
+    if (now < this.shakeUntil && i <= this.shakeIntensity) return;
+    if (i <= SMALL_SHAKE) {
+      if (now - this.lastSmallShakeAt < SMALL_MIN_GAP_MS) return;
+      this.lastSmallShakeAt = now;
+    }
+
+    this.shakeUntil = now + d;
+    this.shakeIntensity = i;
+    this.cameras.main.shake(d, i, true); // force: a stronger shake takes over
   }
 
   /**
@@ -656,9 +763,13 @@ export class GameScene extends Phaser.Scene {
 
     if (this.stats.revives > 0) {
       this.stats.revives--;
+      this.run.revivesUsed++; // keeps recomputeStats from refunding the charge
       this.player.isAlive = true;
       this.player.hp = Math.ceil(this.player.maxHp * 0.5);
       this.player.heal(0); // emit HP_CHANGED via the player's own path
+      // A real second chance: the leftover i-frames from the killing hit
+      // (~0.5s) are not enough to escape the pile the player died in.
+      this.player.grantInvuln(PLAYER.REVIVE_IFRAME_MS);
 
       // Revive nova: clear nearby enemies-of-the-screen feel + big juice.
       Sound.play('revive');
@@ -680,14 +791,27 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Knock back / damage everything close so the revive actually saves you.
-      const near = this.getEnemiesInRadius(this.player.x, this.player.y, 220);
+      const near = this.getEnemiesInRadius(
+        this.player.x,
+        this.player.y,
+        PLAYER.REVIVE_NOVA_RADIUS
+      );
       for (let i = 0; i < near.length; i++) {
-        this.damageEnemy(near[i], this.stats.maxHp, { knockback: 380 });
+        this.damageEnemy(near[i], this.stats.maxHp, { knockback: 520 });
       }
+
+      // Freeze beat: pause the world (same pattern as the level-up screen —
+      // the scene clock stops, so the revive i-frames don't tick down either)
+      // and let the always-live UIScene play the beat + resume after
+      // PLAYER.REVIVE_FREEZE_MS. Without this the revive flashes by too fast
+      // to register in a horde.
+      this.events.emit(EVENTS.REVIVED, { revivesLeft: this.stats.revives });
+      this.scene.pause();
       return;
     }
 
-    this.endRun(false);
+    // Dying in overtime still counts as the victory it already was.
+    this.endRun(this.run.victoryAchieved);
   }
 
   /** Finalise the run: build the summary, persist best time, transition. */
@@ -697,9 +821,10 @@ export class GameScene extends Phaser.Scene {
     this.run.victory = victory;
 
     // Silence the battle loop, then the outcome sting (both survive the scene
-    // transition — they live on the AudioContext, not the scene).
+    // transition — they live on the AudioContext, not the scene). The victory
+    // sting already played at the 8:00 mark (onVictoryReached) — don't repeat.
     Music.stop();
-    Sound.play(victory ? 'victory' : 'defeat');
+    if (!victory) Sound.play('defeat');
 
     const weapons: OwnedWeaponView[] = this.ctx.weaponSystem.getOwned().map((w) => ({
       id: w.id,
@@ -726,13 +851,15 @@ export class GameScene extends Phaser.Scene {
       gold: this.run.gold,
       victory,
       curse: this.run.curse,
+      score: this.currentScore(),
+      scoreBreakdown: this.scoreTerms(),
       weapons,
       items,
       weaponDamage,
     };
 
-    // A victory raises the curse-contract unlock ceiling.
-    if (victory) MetaState.recordVictory(this.run.curse);
+    // (The curse-contract unlock was already recorded in onVictoryReached —
+    // it must survive an overtime death, so it can't wait until here.)
 
     // Best-time persistence AND "new best" detection are owned by GameOverScene
     // (it must compare against the PRIOR record before overwriting it).
@@ -761,6 +888,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.events.emit(EVENTS.KILLS_CHANGED, { kills: s.kills });
     this.events.emit(EVENTS.GOLD_CHANGED, { gold: s.gold });
+    this.events.emit(EVENTS.SCORE_CHANGED, { score: s.score });
     this.events.emit(EVENTS.TIMER, { elapsedMs: s.elapsedMs });
     this.events.emit(EVENTS.WEAPONS_CHANGED, { owned: s.weapons });
     this.events.emit(EVENTS.ITEMS_CHANGED, { owned: s.items });
@@ -778,6 +906,7 @@ export class GameScene extends Phaser.Scene {
     level: number;
     kills: number;
     gold: number;
+    score: number;
     elapsedMs: number;
     weapons: OwnedWeaponView[];
     items: OwnedItemView[];
@@ -797,6 +926,7 @@ export class GameScene extends Phaser.Scene {
       level: this.run.level,
       kills: this.run.kills,
       gold: this.run.gold,
+      score: this.currentScore(),
       elapsedMs: this.run.elapsedMs,
       weapons,
       items: this.ctx.upgradeSystem.getItemViews(),
@@ -811,6 +941,7 @@ export class GameScene extends Phaser.Scene {
     // Drop cross-scene listeners + pooled text so a retry starts clean.
     this.events.off(EVENTS.UPGRADE_CHOSEN);
     this.events.off(EVENTS.REROLL_REQUESTED);
+    this.events.off(EVENTS.VICTORY_DECIDED);
     this.popPool.length = 0;
   }
 }

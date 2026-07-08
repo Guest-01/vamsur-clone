@@ -11,7 +11,7 @@
 import Phaser from 'phaser';
 import type { EnemyDef, GameContext, IEnemySpawner, WaveEntry } from '../types';
 import { ENEMIES, WAVES } from '../content/enemies';
-import { CHAMPION, SPAWN, championChance, curseMults } from '../config/balance';
+import { CHAMPION, OVERTIME, SPAWN, championChance, curseMults, overtimeMults } from '../config/balance';
 import { Enemy } from '../entities/Enemy';
 import { Sound } from '../audio/Sound';
 
@@ -52,14 +52,23 @@ export class EnemySpawner implements IEnemySpawner {
     if (!wave) return;
 
     // --- 2. cadence spawning --------------------------------------------
-    // The curse contract raises the concurrent cap; a surge run-event (blood
-    // moon) additionally speeds up the cadence and adds a flat cap bonus.
+    // The curse contract speeds up the cadence (spawnRate) and raises the
+    // concurrent cap; a surge run-event (blood moon) stacks on top of both,
+    // and post-victory overtime ramps them all steeply per minute. The final
+    // cap is clamped so it can never outgrow the enemy pool.
+    const curse = curseMults(ctx.run.curse);
+    const ot = overtimeMults(elapsedMs);
     this.spawnAccum += delta;
-    const intervalMs = (wave.spawnIntervalSec * 1000) / (ctx.run.eventSpawnRate || 1);
+    const intervalMs =
+      (wave.spawnIntervalSec * 1000) /
+      ((ctx.run.eventSpawnRate || 1) * curse.spawnRate * ot.spawnRate);
     if (this.spawnAccum < intervalMs) return;
     this.spawnAccum -= intervalMs;
 
-    const cap = Math.round(wave.cap * curseMults(ctx.run.curse).cap) + ctx.run.eventCapBonus;
+    const cap = Math.min(
+      OVERTIME.MAX_CAP,
+      Math.round(wave.cap * curse.cap) + ot.capAdd + ctx.run.eventCapBonus
+    );
     const alive = ctx.enemies.countActive(true);
     if (alive >= cap) return;
 
@@ -69,7 +78,7 @@ export class EnemySpawner implements IEnemySpawner {
     if (toSpawn <= 0) return;
 
     const ring = this.ringRadius();
-    const champChance = championChance(elapsedMs);
+    const champChance = championChance(elapsedMs, ctx.run.curse);
     for (let i = 0; i < toSpawn; i++) {
       const id = wave.enemies[(ctx.rng.between(0, wave.enemies.length - 1)) | 0];
       let def = ENEMIES[id];
@@ -95,6 +104,7 @@ export class EnemySpawner implements IEnemySpawner {
         baseHp: base.baseHp * CHAMPION.HP_MULT,
         contactDamage: base.contactDamage * CHAMPION.DMG_MULT,
         xp: base.xp * CHAMPION.XP_MULT,
+        score: base.score * CHAMPION.SCORE_MULT,
         goldChance: CHAMPION.GOLD_CHANCE,
         scale: base.scale * CHAMPION.SCALE_MULT,
         knockbackResist: Math.min(0.9, base.knockbackResist + CHAMPION.KNOCKBACK_RESIST_BONUS),

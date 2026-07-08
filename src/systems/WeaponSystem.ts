@@ -1042,7 +1042,9 @@ export class WeaponSystem implements IWeaponSystem {
     const tint = w.def.projectileTint ?? 0xff7a2a;
 
     Sound.play('explode');
-    this.ctx.shakeCamera(0.004, 100);
+    // barely-there thump: the ring + flash carry the impact, and blasts fire
+    // 1-2x/sec in a horde — anything bigger reads as constant jitter.
+    this.ctx.shakeCamera(0.002, 60);
 
     const enemies = this.ctx.getEnemiesInRadius(m.x, m.y, blastR);
     for (const e of enemies) {

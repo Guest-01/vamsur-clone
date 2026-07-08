@@ -9,6 +9,7 @@ export interface PauseSummary {
   level: number;
   kills: number;
   gold: number;
+  score: number;
   elapsedMs: number;
   hp: number;
   maxHp: number;
@@ -213,10 +214,10 @@ export class PauseOverlay {
     const leftCx = cx - panelW / 4; // centre of the left half
     const left = cx - panelW / 2 + 68;
 
-    // --- stat summary row (time / level / kills / gold) ---
+    // --- stat summary row (time / level / kills / gold / score) ---
     const statsY = cy - 192;
     const mmss = this.formatTime(s.elapsedMs);
-    const statLine = `시간 ${mmss}    레벨 ${s.level}    처치 ${s.kills}    골드 ${s.gold}`;
+    const statLine = `시간 ${mmss}   레벨 ${s.level}   처치 ${s.kills}   골드 ${s.gold}   점수 ${s.score.toLocaleString()}`;
     const stats = scene.add
       .text(leftCx, statsY, statLine, {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',

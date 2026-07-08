@@ -28,8 +28,10 @@ function fmtDamage(n: number): string {
  */
 export class GameOverScene extends Phaser.Scene {
   private summary!: RunSummary;
-  /** Whether this run set a new best survival time (defeat runs only). */
+  /** Whether this run set a new best survival time. */
   private newBest = false;
+  /** Whether this run set a new best score. */
+  private newBestScore = false;
   /** live width captured at build time; used to throttle resize restarts. */
   private lastW = 0;
 
@@ -40,6 +42,7 @@ export class GameOverScene extends Phaser.Scene {
   init(data: { summary: RunSummary }): void {
     this.summary = data.summary;
     this.newBest = this.recordBest(this.summary);
+    this.newBestScore = this.recordBestScore(this.summary);
   }
 
   create(): void {
@@ -50,17 +53,18 @@ export class GameOverScene extends Phaser.Scene {
 
     this.buildBackdrop(W, H);
 
-    // central panel
-    const pw = 1120;
-    const ph = 820;
+    // central panel — two-column body (records left, gear right), same 1420
+    // width idiom as the pause panel.
+    const pw = 1420;
+    const ph = 780;
     this.add
       .rectangle(W / 2, H / 2, pw, ph, COLORS.PANEL, 0.96)
       .setStrokeStyle(6, COLORS.PANEL_BORDER)
       .setDepth(DEPTH.POPTEXT);
 
-    this.buildHeadline(W, s.victory);
-    this.buildStats(W, s);
-    this.buildBuild(W, s);
+    this.buildHeadline(W, s);
+    this.buildRecords(W / 2 - 330, s);
+    this.buildGear(W / 2 + 330, s);
     this.buildButtons(W, s);
 
     this.bindInput();
@@ -105,16 +109,16 @@ export class GameOverScene extends Phaser.Scene {
 
   /* --------------------------- headline --------------------------- */
 
-  private buildHeadline(W: number, victory: boolean): void {
-    const top = GAME.HEIGHT / 2 - 400 + 28;
-    const title = victory ? 'YOU SURVIVED' : 'YOU DIED';
-    const color = victory ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT;
+  private buildHeadline(W: number, s: RunSummary): void {
+    const top = GAME.HEIGHT / 2 - 390 + 30;
+    const title = s.victory ? 'YOU SURVIVED' : 'YOU DIED';
+    const color = s.victory ? COLORS.GOLD_LIGHT : COLORS.BLOOD_LIGHT;
 
     const headline = this.add
       .text(W / 2, top + 36, title, {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
-        fontSize: '92px',
+        fontSize: '84px',
         color: hex(color),
       })
       .setOrigin(0.5)
@@ -141,58 +145,39 @@ export class GameOverScene extends Phaser.Scene {
       ease: 'Sine.inOut',
     });
 
+    // flavour + (hard mode) the curse badge, merged into a single line so the
+    // headline zone stays two rows tall.
+    const flavour = s.victory ? '영원한 밤을 견뎌냈다' : '어둠에 삼켜졌다';
+    const subtitle = s.curse > 0 ? `${flavour}  ·  ☠ 저주 계약 ${s.curse}단계` : flavour;
     this.add
-      .text(W / 2, top + 100, victory ? '영원한 밤을 견뎌냈다' : '어둠에 삼켜졌다', {
+      .text(W / 2, top + 100, subtitle, {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
-        fontSize: '28px',
-        color: hex(COLORS.PARCHMENT),
+        fontSize: '26px',
+        color: hex(s.curse > 0 ? 0xb794e0 : COLORS.PARCHMENT),
       })
       .setOrigin(0.5)
       .setDepth(DEPTH.POPTEXT)
-      .setAlpha(0.85);
-
-    // curse-contract badge (hard-mode runs only)
-    if (this.summary.curse > 0) {
-      this.add
-        .text(W / 2, top + 140, `☠ 저주 계약 ${this.summary.curse}단계`, {
-          fontFamily: 'Cinzel, "Noto Serif KR", serif',
-          fontStyle: '700',
-          fontSize: '24px',
-          color: '#b066ff',
-        })
-        .setOrigin(0.5)
-        .setDepth(DEPTH.POPTEXT);
-    }
+      .setAlpha(0.9);
   }
 
   /* ---------------------------- stats ----------------------------- */
 
-  private buildStats(W: number, s: RunSummary): void {
-    const cy = GAME.HEIGHT / 2 - 156;
+  /** Left column — score (hero number), breakdown, time, level/kills/gold. */
+  private buildRecords(lx: number, s: RunSummary): void {
+    const H2 = GAME.HEIGHT / 2;
 
-    // Time — highlighted gold if it is a new best record.
-    const timeColor = this.newBest ? COLORS.GOLD_LIGHT : COLORS.BONE;
-    const timeLabel = this.add
-      .text(W / 2, cy, formatTime(s.timeMs), {
+    // Score — the run's ONE hero number.
+    const scoreLabel = this.add
+      .text(lx, H2 - 150, `SCORE ${s.score.toLocaleString()}${this.newBestScore ? ' ★' : ''}`, {
         fontFamily: '"Press Start 2P", Galmuri11, monospace',
-        fontSize: '52px',
-        color: hex(timeColor),
+        fontSize: '38px',
+        color: hex(this.newBestScore ? COLORS.GOLD_LIGHT : COLORS.GOLD),
       })
       .setOrigin(0.5)
       .setDepth(DEPTH.POPTEXT);
-
-    if (this.newBest) {
-      const tag = this.add
-        .text(W / 2, cy + 48, '★ 신기록 ★', {
-          fontFamily: 'Cinzel, "Noto Serif KR", serif',
-          fontStyle: '700',
-          fontSize: '26px',
-          color: hex(COLORS.GOLD),
-        })
-        .setOrigin(0.5)
-        .setDepth(DEPTH.POPTEXT);
+    if (this.newBestScore) {
       this.tweens.add({
-        targets: [timeLabel, tag],
+        targets: scoreLabel,
         scale: { from: 1, to: 1.06 },
         duration: 700,
         yoyo: true,
@@ -201,28 +186,77 @@ export class GameOverScene extends Phaser.Scene {
       });
     }
 
+    // Breakdown — terms on one line, the curse multiplier on its own.
+    const b = s.scoreBreakdown;
+    let detail = `생존 ${b.timePts.toLocaleString()} + 처치 ${b.killPts.toLocaleString()} + 레벨 ${b.levelPts.toLocaleString()}`;
+    if (b.victoryPts > 0) detail += ` + 승리 ${b.victoryPts.toLocaleString()}`;
+    this.add
+      .text(lx, H2 - 104, detail, {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '18px',
+        color: hex(COLORS.TEXT_DIM),
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.POPTEXT);
+    if (b.curseMult > 1) {
+      this.add
+        .text(lx, H2 - 76, `× ${b.curseMult.toFixed(2)} (저주 계약 보정)`, {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
+          fontStyle: '700',
+          fontSize: '18px',
+          color: '#b794e0',
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH.POPTEXT);
+    }
+
+    // Survival time.
+    const timeLabel = this.add
+      .text(lx, H2 - 22, `생존 ${formatTime(s.timeMs)}${this.newBest ? ' ★' : ''}`, {
+        fontFamily: '"Press Start 2P", Galmuri11, monospace',
+        fontSize: '30px',
+        color: hex(this.newBest ? COLORS.GOLD_LIGHT : COLORS.BONE),
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.POPTEXT);
+    if (this.newBest) {
+      this.tweens.add({
+        targets: timeLabel,
+        scale: { from: 1, to: 1.06 },
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.inOut',
+      });
+    }
+
+    // divider
+    this.add
+      .rectangle(lx, H2 + 22, 560, 2, COLORS.PANEL_BORDER, 1)
+      .setDepth(DEPTH.POPTEXT);
+
     // three stat columns: Level / Kills / Gold
-    const row = cy + 104;
     const cols: Array<{ label: string; value: string; color: number }> = [
       { label: 'LEVEL', value: `${s.level}`, color: COLORS.XP_BAR },
       { label: 'KILLS', value: `${s.kills}`, color: COLORS.BLOOD_LIGHT },
       { label: 'GOLD', value: `${s.gold}`, color: COLORS.GOLD },
     ];
-    const spread = 300;
+    const spread = 210;
     cols.forEach((c, i) => {
-      const x = W / 2 + (i - 1) * spread;
+      const x = lx + (i - 1) * spread;
       this.add
-        .text(x, row, c.label, {
+        .text(x, H2 + 60, c.label, {
           fontFamily: '"Press Start 2P", Galmuri11, monospace',
-          fontSize: '18px',
+          fontSize: '16px',
           color: hex(COLORS.TEXT_DIM),
         })
         .setOrigin(0.5)
         .setDepth(DEPTH.POPTEXT);
       this.add
-        .text(x, row + 44, c.value, {
+        .text(x, H2 + 100, c.value, {
           fontFamily: '"Press Start 2P", Galmuri11, monospace',
-          fontSize: '32px',
+          fontSize: '28px',
           color: hex(c.color),
         })
         .setOrigin(0.5)
@@ -232,11 +266,12 @@ export class GameOverScene extends Phaser.Scene {
 
   /* --------------------------- the build -------------------------- */
 
-  private buildBuild(W: number, s: RunSummary): void {
-    const cy = GAME.HEIGHT / 2 + 72;
+  /** Right column — the acquired build (icon grid) + top damage contributors. */
+  private buildGear(rx: number, s: RunSummary): void {
+    const H2 = GAME.HEIGHT / 2;
 
     this.add
-      .text(W / 2, cy - 36, '획득한 장비', {
+      .text(rx, H2 - 184, '획득한 장비', {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '24px',
@@ -245,26 +280,22 @@ export class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(DEPTH.POPTEXT);
 
-    // weapons first, then items — one combined row of framed icon slots
+    // weapons first, then items — a fixed 6-per-row grid (max 12 slots total,
+    // so two rows can never spill into the damage chart below)
     const entries: Array<OwnedWeaponView | OwnedItemView> = [...s.weapons, ...s.items];
-    if (entries.length === 0) return;
-
-    const slot = 92;
-    const gap = 16;
-    const perRow = Math.min(entries.length, 10);
+    const slot = 84;
+    const gap = 14;
+    const perRow = 6;
     const rowW = perRow * slot + (perRow - 1) * gap;
-    const startX = W / 2 - rowW / 2 + slot / 2;
-    const rowY = cy + 32;
-
-    // per-weapon damage lookup for the mini bar chart under weapon slots
-    const dmgById = new Map(s.weaponDamage.map((d) => [d.id, d.total]));
-    const maxDmg = s.weaponDamage.length > 0 ? s.weaponDamage[0].total : 0;
+    const startX = rx - rowW / 2 + slot / 2;
+    const rowY = H2 - 126;
+    const rowPitch = slot + gap;
 
     entries.forEach((e, i) => {
       const col = i % perRow;
       const rowN = Math.floor(i / perRow);
       const x = startX + col * (slot + gap);
-      const y = rowY + rowN * (slot + gap);
+      const y = rowY + rowN * rowPitch;
 
       // framed slot
       this.add
@@ -272,53 +303,70 @@ export class GameOverScene extends Phaser.Scene {
         .setStrokeStyle(4, COLORS.PANEL_BORDER)
         .setDepth(DEPTH.POPTEXT);
 
-      const icon = this.add.image(x, y - 6, TEXTURES.PIXEL).setDepth(DEPTH.POPTEXT);
-      this.applyIcon(icon, e.icon, ENTITY_SCALE * 2.8);
+      const icon = this.add.image(x, y - 2, TEXTURES.PIXEL).setDepth(DEPTH.POPTEXT);
+      this.applyIcon(icon, e.icon, ENTITY_SCALE * 2.4);
 
       // level / max pip, on a small backing chip so it stays legible over any icon
-      const pipLabel = `${e.level}/${e.maxLevel}`;
       const pipText = this.add
-        .text(0, 0, pipLabel, {
+        .text(0, 0, `${e.level}/${e.maxLevel}`, {
           fontFamily: '"Press Start 2P", Galmuri11, monospace',
-          fontSize: '16px',
+          fontSize: '14px',
           color: e.level >= e.maxLevel ? hex(COLORS.GOLD_LIGHT) : hex(COLORS.BONE),
         })
         .setOrigin(1, 1)
         .setDepth(DEPTH.POPTEXT + 1);
-      const chipW = pipText.width + 10;
-      const chipH = pipText.height + 4;
       const chipX = x + slot / 2 - 2;
       const chipY = y + slot / 2 - 2;
       this.add
-        .rectangle(chipX, chipY, chipW, chipH, 0x0a0a12, 0.82)
+        .rectangle(chipX, chipY, pipText.width + 10, pipText.height + 4, 0x0a0a12, 0.82)
         .setOrigin(1, 1)
         .setDepth(DEPTH.POPTEXT);
       pipText.setPosition(chipX - 5, chipY - 2);
+    });
 
-      // weapons (always the leading entries) get a total-damage bar + number,
-      // scaled against the run's top damage dealer.
-      if (i < s.weapons.length && maxDmg > 0) {
-        const total = dmgById.get(e.id) ?? 0;
-        const frac = Phaser.Math.Clamp(total / maxDmg, 0, 1);
-        const barW = slot - 8;
-        const barY = y + slot / 2 + 12;
-        this.add
-          .rectangle(x, barY, barW, 8, 0x0a0a12, 0.9)
-          .setStrokeStyle(1, COLORS.PANEL_BORDER)
-          .setDepth(DEPTH.POPTEXT);
-        this.add
-          .rectangle(x - barW / 2, barY, Math.max(2, barW * frac), 8, COLORS.GOLD, 1)
-          .setOrigin(0, 0.5)
-          .setDepth(DEPTH.POPTEXT + 1);
-        this.add
-          .text(x, barY + 20, fmtDamage(total), {
-            fontFamily: '"Press Start 2P", Galmuri11, monospace',
-            fontSize: '13px',
-            color: hex(COLORS.TEXT_DIM),
-          })
-          .setOrigin(0.5)
-          .setDepth(DEPTH.POPTEXT);
-      }
+    // Damage contribution — a ranked horizontal bar chart of the top weapons,
+    // separated from the grid so slots stay clean and rows can't collide.
+    const top = s.weaponDamage.slice(0, 4);
+    if (top.length === 0) return;
+    const maxDmg = top[0].total || 1;
+
+    this.add
+      .text(rx, H2 + 64, '피해 기여', {
+        fontFamily: 'Cinzel, "Noto Serif KR", serif',
+        fontStyle: '700',
+        fontSize: '24px',
+        color: hex(COLORS.TEXT_DIM),
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.POPTEXT);
+
+    const barX = rx - 250; // track left edge (icon sits left of it)
+    const barMaxW = 430;
+    top.forEach((d, i) => {
+      const y = H2 + 108 + i * 38;
+
+      const icon = this.add.image(rx - 292, y, TEXTURES.PIXEL).setDepth(DEPTH.POPTEXT);
+      this.applyIcon(icon, d.icon, 1.7);
+
+      this.add
+        .rectangle(barX, y, barMaxW, 16, 0x0a0a12, 0.9)
+        .setOrigin(0, 0.5)
+        .setStrokeStyle(1, COLORS.PANEL_BORDER)
+        .setDepth(DEPTH.POPTEXT);
+      const frac = Phaser.Math.Clamp(d.total / maxDmg, 0, 1);
+      this.add
+        .rectangle(barX + 1, y, Math.max(3, (barMaxW - 2) * frac), 12, COLORS.GOLD, 1)
+        .setOrigin(0, 0.5)
+        .setDepth(DEPTH.POPTEXT + 1);
+
+      this.add
+        .text(rx + 296, y, fmtDamage(d.total), {
+          fontFamily: '"Press Start 2P", Galmuri11, monospace',
+          fontSize: '14px',
+          color: hex(COLORS.BONE),
+        })
+        .setOrigin(1, 0.5)
+        .setDepth(DEPTH.POPTEXT);
     });
   }
 
@@ -452,6 +500,33 @@ export class GameOverScene extends Phaser.Scene {
         /* ignore unavailable storage */
       }
       return prev > 0; // only flag a "new best" if there was a prior record to beat
+    }
+    return false;
+  }
+
+  /** Same pattern as recordBest, for the run score. */
+  private recordBestScore(s: RunSummary): boolean {
+    let prev = 0;
+    const reg = this.registry.get(REGISTRY.BEST_SCORE);
+    if (typeof reg === 'number') prev = reg;
+    if (prev <= 0) {
+      try {
+        const raw = window.localStorage.getItem(REGISTRY.BEST_SCORE);
+        const n = raw ? parseInt(raw, 10) : 0;
+        if (Number.isFinite(n)) prev = n;
+      } catch {
+        /* ignore unavailable storage */
+      }
+    }
+
+    if (s.score > prev) {
+      this.registry.set(REGISTRY.BEST_SCORE, s.score);
+      try {
+        window.localStorage.setItem(REGISTRY.BEST_SCORE, String(Math.floor(s.score)));
+      } catch {
+        /* ignore unavailable storage */
+      }
+      return prev > 0;
     }
     return false;
   }

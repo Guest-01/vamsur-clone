@@ -85,10 +85,13 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   /** boomerang: squared player distance last frame (turn-around detection) */
   private prevDistSq = 0;
   /**
-   * Enemies already damaged by THIS shot. Enforces one hit per enemy so a
-   * piercing shot cannot tick the same target repeatedly. Reset on every fire.
+   * Enemies already damaged by THIS shot (instance -> spawnGen at hit time).
+   * Enforces one hit per enemy so a piercing shot cannot tick the same target
+   * repeatedly. Storing spawnGen matters: a pooled instance may die and be
+   * recycled as a brand-new enemy while this shot is still alive — comparing
+   * generations keeps the new occupant hittable. Reset on every fire.
    */
-  private readonly hitSet = new Set<EnemySprite>();
+  private readonly hitGen = new Map<EnemySprite, number>();
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0, TEXTURES.KNIFE, 0);
@@ -144,7 +147,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.crit = opts.crit;
     this.sourceId = opts.sourceId;
     this.life = opts.life;
-    this.hitSet.clear();
+    this.hitGen.clear();
   }
 
   preUpdate(time: number, delta: number): void {
@@ -177,7 +180,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
       // return pass — every enemy may be hit once more on the way back.
       if (this.outbound && this.prevDistSq > 0 && distSq < this.prevDistSq) {
         this.outbound = false;
-        this.hitSet.clear();
+        this.hitGen.clear();
       }
       this.prevDistSq = distSq;
       // Caught: returned to hand reach.
@@ -199,8 +202,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
    */
   hit(enemy: EnemySprite): void {
     if (!this.active) return;
-    if (this.hitSet.has(enemy)) return;
-    this.hitSet.add(enemy);
+    if (this.hitGen.get(enemy) === enemy.spawnGen) return;
+    this.hitGen.set(enemy, enemy.spawnGen);
 
     this.ctx.damageEnemy(enemy, this.damage, {
       knockback: this.knockback,

@@ -234,9 +234,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite implements PlayerLike {
     const now = this.scene.time.now;
     if (!this.isAlive || now < this.iframeUntil) return;
 
-    // Dodge: a clean miss with a tiny "miss" tell, no i-frames consumed.
+    // Dodge: a clean miss. It MUST open the same i-frame window a hit would:
+    // Arcade overlap re-fires every physics step while contact persists, so
+    // without it a surrounded player re-rolls dodge every frame and the stat
+    // collapses to a ~1-frame delay instead of a real miss chance.
     if (this.stats.dodge > 0 && this.ctx.rng.frac() < this.stats.dodge) {
       this.ctx.popText(this.x, this.y - 14, 'MISS', COLORS.BONE);
+      this.iframeUntil = now + PLAYER.IFRAME_MS;
       return;
     }
 
@@ -266,6 +270,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite implements PlayerLike {
       this.isAlive = false;
       // GameScene's update loop sees isAlive=false and handles revive/death.
     }
+  }
+
+  /**
+   * Open an invulnerability window of `ms` (never shortens a running one).
+   * Used by the revive flow — the leftover i-frames from the killing hit are
+   * far too short to escape the pile the player died in.
+   */
+  grantInvuln(ms: number): void {
+    this.iframeUntil = Math.max(this.iframeUntil, this.scene.time.now + ms);
   }
 
   /**

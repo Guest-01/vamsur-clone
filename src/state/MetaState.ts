@@ -24,20 +24,26 @@ interface MetaSave {
 const DEFAULT_CHARS = ['knight', 'mage', 'rogue'];
 const DEFAULT_WEAPONS = ['whip', 'wand', 'knife', 'axe', 'sanctuary', 'orbit'];
 
-/** One-time gold cost to unlock the expansion characters / weapons. */
+/**
+ * One-time gold cost to unlock the expansion characters / weapons. Nudged up
+ * ~30% (chars 350→450, weapons across four tiers) so the content chase lasts a
+ * few runs instead of being cleared in the first ~2: at the previous prices the
+ * whole locked roster (2,500g) fell to ~1.5 runs of income, so new weapons
+ * stopped gating almost immediately.
+ */
 export const CHAR_UNLOCK_COST: Record<string, number> = {
-  cleric: 350,
-  warrior: 350,
+  cleric: 450,
+  warrior: 450,
 };
 export const WEAPON_UNLOCK_COST: Record<string, number> = {
-  greatsword: 150,
-  spear: 150,
-  runebolt: 200,
-  miasma: 200,
-  lightning: 250,
-  boomerang: 250,
-  mine: 300,
-  leech: 300,
+  greatsword: 200,
+  spear: 200,
+  runebolt: 260,
+  miasma: 260,
+  lightning: 330,
+  boomerang: 330,
+  mine: 400,
+  leech: 400,
 };
 
 function defaults(): MetaSave {

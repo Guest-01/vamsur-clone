@@ -75,6 +75,8 @@ export class MenuScene extends Phaser.Scene {
   private lockHint?: Phaser.GameObjects.Text;
   /** live width captured at build time; used to throttle resize restarts. */
   private lastW = 0;
+  /** a fade-out to game/shop is running; blocks all keyboard-driven actions. */
+  private transitioning = false;
 
   constructor() {
     super(SCENES.MENU);
@@ -92,6 +94,7 @@ export class MenuScene extends Phaser.Scene {
     this.cards = [];
     this.cardFrames = [];
     this.wanderers = [];
+    this.transitioning = false;
 
     MetaState.load();
 
@@ -480,6 +483,20 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(DEPTH.POPTEXT);
 
+    // Best score right under the best time (same right-aligned column).
+    const bestScore = this.loadBestScore();
+    if (bestScore > 0) {
+      this.add
+        .text(W - 40, 146, `✦ 최고 점수 ${bestScore.toLocaleString()}`, {
+          fontFamily: 'Cinzel, "Noto Serif KR", serif',
+          fontStyle: '700',
+          fontSize: '26px',
+          color: hex(COLORS.GOLD),
+        })
+        .setOrigin(1, 0.5)
+        .setDepth(DEPTH.POPTEXT);
+    }
+
     // curse-contract selector — only after the base game has been beaten
     if (this.maxCurse > 0) this.buildCurseSelector(W);
 
@@ -534,10 +551,12 @@ export class MenuScene extends Phaser.Scene {
       this.help.show();
     });
 
-    // master mute toggle (top-right, under the best-time readout; M also works
-    // everywhere — the icon re-renders through Sound.onChanged either way)
+    // master mute toggle (top-right, at the BOTTOM of the stack: guide 56 /
+    // best time 108 / best score 146 / mute 190 — it used to sit at 152 and
+    // covered the best-score line; M also works everywhere — the icon
+    // re-renders through Sound.onChanged either way)
     const mute = this.add
-      .text(W - 40, 152, '', {
+      .text(W - 40, 190, '', {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
         fontSize: '26px',
@@ -620,11 +639,13 @@ export class MenuScene extends Phaser.Scene {
   private buildCurseSelector(W: number): void {
     const y = 884;
 
+    // 24px + wide arrow spread: the curse line now lists four effects and at
+    // 26px it collided with arrows only ±360 apart.
     this.curseLabel = this.add
       .text(W / 2, y, this.curseText(), {
         fontFamily: 'Cinzel, "Noto Serif KR", serif',
         fontStyle: '700',
-        fontSize: '26px',
+        fontSize: '24px',
         color: hex(this.curse > 0 ? COLORS.BLOOD_LIGHT : COLORS.PARCHMENT),
       })
       .setOrigin(0.5)
@@ -644,18 +665,21 @@ export class MenuScene extends Phaser.Scene {
       t.on('pointerout', () => t.setColor(hex(COLORS.PARCHMENT)));
       t.on('pointerdown', () => this.changeCurse(dir));
     };
-    mkArrow(W / 2 - 360, '◀', -1);
-    mkArrow(W / 2 + 360, '▶', 1);
+    mkArrow(W / 2 - 480, '◀', -1);
+    mkArrow(W / 2 + 480, '▶', 1);
   }
 
   private curseText(): string {
     if (this.curse <= 0) return '☠ 저주 계약: 없음  (W/S · ▲▼)';
     const c = this.curse;
-    return `☠ 저주 ${c}단계 — 적 체력 +${35 * c}% · 골드 +${25 * c}% · 경험치 +${15 * c}%`;
+    const hpPct = Math.round((Math.pow(1.3, c) - 1) * 100); // mirrors curseMults
+    return `☠ 저주 ${c}단계 — 적 체력 +${hpPct}% · 쇄도 +${10 * c}% · 골드 +${25 * c}% · 점수 ×${(1 + 0.25 * c).toFixed(2)}`;
   }
 
   private changeCurse(dir: number): void {
-    if (this.maxCurse <= 0 || this.help?.isVisible()) return;
+    // `transitioning` matters: the keyboard stays live during the descend fade
+    // (see descend()), so W/S here could still mutate curse + the registry.
+    if (this.transitioning || this.maxCurse <= 0 || this.help?.isVisible()) return;
     const next = Phaser.Math.Clamp(this.curse + dir, 0, this.maxCurse);
     if (next !== this.curse) Sound.play('uiClick');
     this.curse = next;
@@ -691,7 +715,8 @@ export class MenuScene extends Phaser.Scene {
 
   /** Fade out and open the meta shop (guard while the guide is open). */
   private openShop(): void {
-    if (this.help?.isVisible()) return;
+    if (this.transitioning || this.help?.isVisible()) return;
+    this.transitioning = true;
     Sound.play('uiClick');
     this.input.enabled = false;
     this.cameras.main.fadeOut(280, 7, 7, 12);
@@ -701,7 +726,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private move(dir: number): void {
-    if (this.help?.isVisible()) return;
+    if (this.transitioning || this.help?.isVisible()) return;
     Sound.play('uiClick');
     const n = CHARACTERS.length;
     this.selected = (this.selected + dir + n) % n;
@@ -783,8 +808,10 @@ export class MenuScene extends Phaser.Scene {
   /* -------------------------- transition -------------------------- */
 
   private descend(): void {
-    // Don't start a run while the guide is open (ENTER/click should close it).
-    if (this.help?.isVisible()) return;
+    // Don't start a run while the guide is open (ENTER/click should close it),
+    // and never re-enter during the fade (ENTER autorepeat would stack
+    // FADE_OUT_COMPLETE listeners and start the GameScene multiple times).
+    if (this.transitioning || this.help?.isVisible()) return;
     const char = CHARACTERS[this.selected];
     // Block starting a run with a character that hasn't been unlocked yet.
     if (!MetaState.isCharacterUnlocked(char.id)) {
@@ -792,11 +819,18 @@ export class MenuScene extends Phaser.Scene {
       this.flashLockedHint();
       return;
     }
+    this.transitioning = true;
     Sound.play('uiConfirm');
     this.input.enabled = false;
+    // Capture the payload NOW. `input.enabled = false` only gates POINTER
+    // input — the keyboard plugin stays live through the fade, so a W/S press
+    // buffered for the run start used to call changeCurse() and silently drop
+    // the chosen curse level (and overwrite the registry) before the callback
+    // below read `this.curse`.
+    const payload = { characterId: char.id, curse: this.curse };
     this.cameras.main.fadeOut(320, 7, 7, 12);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start(SCENES.GAME, { characterId: char.id, curse: this.curse });
+      this.scene.start(SCENES.GAME, payload);
     });
   }
 
@@ -833,6 +867,18 @@ export class MenuScene extends Phaser.Scene {
     if (typeof reg === 'number' && reg > 0) return reg;
     try {
       const raw = window.localStorage.getItem(REGISTRY.BEST_TIME);
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private loadBestScore(): number {
+    const reg = this.registry.get(REGISTRY.BEST_SCORE);
+    if (typeof reg === 'number' && reg > 0) return reg;
+    try {
+      const raw = window.localStorage.getItem(REGISTRY.BEST_SCORE);
       const n = raw ? parseInt(raw, 10) : 0;
       return Number.isFinite(n) ? n : 0;
     } catch {

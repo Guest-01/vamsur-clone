@@ -37,6 +37,15 @@ export const EVENTS = {
   KILLS_CHANGED: 'kills-changed',
   /** {gold:number} */
   GOLD_CHANGED: 'gold-changed',
+  /** {score:number} — live run score (emitted on kills + the timer cadence) */
+  SCORE_CHANGED: 'score-changed',
+  /** {revivesLeft:number} — game -> UI: an auto-revive fired; the GameScene is
+   *  paused for the freeze beat and the UIScene resumes it (REVIVE_FREEZE_MS) */
+  REVIVED: 'revived',
+  /** {} — game -> UI: 8:00 survived; show the "end or overtime?" choice (gameplay is paused) */
+  VICTORY_CHOICE: 'victory-choice',
+  /** {continueRun:boolean} — UI -> game: the player's overtime decision */
+  VICTORY_DECIDED: 'victory-decided',
   /** {elapsedMs:number} emitted ~4x/sec */
   TIMER: 'timer',
   /** {owned: OwnedWeaponView[]} */
@@ -58,6 +67,10 @@ export const EVENTS = {
 /** Phaser data-registry / scene-data keys. */
 export const REGISTRY = {
   BEST_TIME: 'vs_best_time_ms',
+  BEST_SCORE: 'vs_best_score',
+  /** stored score-formula version; a bump wipes the now-incomparable best score
+   *  exactly once at boot (see BootScene + balance.SCORE.FORMULA_VERSION) */
+  SCORE_FORMULA_VER: 'vs_score_formula_ver',
   SELECTED_CHARACTER: 'vs_selected_character',
   MUTED: 'vs_muted',
   META: 'vs_meta_v1',
@@ -255,6 +268,8 @@ export interface EnemyDef {
   moveSpeed: number; // px/s
   /** xp value of the gem dropped on death */
   xp: number;
+  /** run-score points awarded for the kill (see balance.SCORE) */
+  score: number;
   /** chance 0..1 to also drop a coin */
   goldChance: number;
   /** display scale multiplier applied on top of the global sprite scale */
@@ -302,6 +317,15 @@ export interface RunState {
   xpToNext: number;
   kills: number;
   gold: number;
+  /** accumulated per-enemy kill score (one term of the run score) */
+  killScore: number;
+  /** the 8:00 mark was survived — victory is locked in even if the player
+   *  later dies in overtime (see GameScene.onVictoryReached) */
+  victoryAchieved: boolean;
+  /** auto-revives consumed this run. `stats.revives` is rebuilt from the
+   *  definitions on every recompute, so spent charges must be re-subtracted
+   *  or level-ups would silently refund them (infinite revives). */
+  revivesUsed: number;
   /** owned passive items -> level */
   ownedItems: Map<ItemId, number>;
   /** level-up reroll charges remaining this run (seeded from stats.rerolls) */
@@ -330,10 +354,22 @@ export interface RunSummary {
   victory: boolean;
   /** curse contract level this run was played at (0 = none) */
   curse: number;
+  /** final run score (already curse-multiplied; see balance.SCORE) */
+  score: number;
+  scoreBreakdown: ScoreBreakdown;
   weapons: OwnedWeaponView[];
   items: OwnedItemView[];
   /** per-weapon total damage, sorted descending (end-of-run chart) */
   weaponDamage: WeaponDamageView[];
+}
+
+/** The pre-multiplier terms of the final score (results-screen detail line). */
+export interface ScoreBreakdown {
+  timePts: number;
+  killPts: number;
+  levelPts: number;
+  victoryPts: number;
+  curseMult: number;
 }
 
 export interface WeaponDamageView {
@@ -503,7 +539,8 @@ export interface GameContext {
   spawnPickup(x: number, y: number, type: PickupType, value?: number): void;
   addXp(amount: number): void;
   addGold(amount: number): void;
-  addKill(): void;
+  /** count a kill; `def` carries the per-enemy score value */
+  addKill(def: EnemyDef): void;
   /** recompute player stats from character base + owned items */
   recomputeStats(): void;
   /** called once per level gained; GameScene queues + shows the choice UI */
