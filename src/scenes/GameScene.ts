@@ -50,6 +50,7 @@ import { WeaponSystem } from '../systems/WeaponSystem';
 import { ExperienceSystem } from '../systems/ExperienceSystem';
 import { UpgradeSystem } from '../systems/UpgradeSystem';
 import { RunEvents } from '../systems/RunEvents';
+import { SpatialGrid } from '../systems/SpatialGrid';
 
 /**
  * GameScene — the heart of the run. It builds the world (scrolling background,
@@ -83,6 +84,13 @@ export class GameScene extends Phaser.Scene {
   private player!: Player;
   private spawner!: EnemySpawner;
   private runEvents!: RunEvents;
+
+  /**
+   * Spatial hash over the active enemies, rebuilt at the top of every update()
+   * so the (very hot) weapon radius/nearest queries only scan nearby cells
+   * instead of the whole pool. See getEnemiesInRadius / getNearestEnemy.
+   */
+  private enemyGrid!: SpatialGrid;
 
   // --- shared state -------------------------------------------------------
   private stats!: PlayerStats;
@@ -153,6 +161,10 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ maxSize: SPAWN.POOL_SIZE });
     this.projectiles = this.physics.add.group({ maxSize: 600 });
     this.pickups = this.physics.add.group({ maxSize: 600 });
+
+    // 3.1) Spatial hash the weapon queries read from (rebuilt each update).
+    //      Fresh per run — the scene instance is reused on retry.
+    this.enemyGrid = new SpatialGrid();
 
     // 3.5) Shared one-shot FX emitters. Hit sparks / death poofs / collect
     //      bursts fire dozens of times per second in a horde, so each effect
@@ -377,6 +389,11 @@ export class GameScene extends Phaser.Scene {
       this.emitChestDir();
     }
 
+    // Re-bin the live enemies before the systems run so this frame's weapon
+    // queries hit the fresh grid. (New spawns from the spawner below land in
+    // next frame's grid — a one-frame lag that gameplay can't perceive.)
+    this.enemyGrid.rebuild(this.enemies.getChildren() as EnemySprite[]);
+
     // Drive the systems. Entities self-update via their own preUpdate.
     this.ctx.weaponSystem.update(time, delta);
     this.spawner.update(time, delta);
@@ -424,38 +441,22 @@ export class GameScene extends Phaser.Scene {
   /* GameContext query helpers                                          */
   /* ------------------------------------------------------------------ */
 
-  /** Nearest active enemy to (x,y), or null. Optional max distance cutoff. */
+  /**
+   * Nearest active enemy to (x,y), or null. Optional max distance cutoff.
+   * Backed by the spatial grid (rebuilt at the top of update()).
+   */
   private getNearestEnemy(x: number, y: number, maxDist?: number): EnemySprite | null {
-    const children = this.enemies.getChildren();
-    let best: EnemySprite | null = null;
-    let bestD2 = maxDist !== undefined ? maxDist * maxDist : Number.POSITIVE_INFINITY;
-    for (let i = 0; i < children.length; i++) {
-      const e = children[i] as EnemySprite;
-      if (!e.active) continue;
-      const dx = e.x - x;
-      const dy = e.y - y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestD2) {
-        bestD2 = d2;
-        best = e;
-      }
-    }
-    return best;
+    return this.enemyGrid.nearest(x, y, maxDist);
   }
 
-  /** All active enemies whose centre is within `radius` of (x,y). */
+  /**
+   * All active enemies whose centre is within `radius` of (x,y). Backed by the
+   * spatial grid — only the cells overlapping the circle are scanned, but every
+   * candidate is distance-checked so the result matches an exact scan. Returns a
+   * fresh array each call (callers may hold onto it across further queries).
+   */
   private getEnemiesInRadius(x: number, y: number, radius: number): EnemySprite[] {
-    const out: EnemySprite[] = [];
-    const r2 = radius * radius;
-    const children = this.enemies.getChildren();
-    for (let i = 0; i < children.length; i++) {
-      const e = children[i] as EnemySprite;
-      if (!e.active) continue;
-      const dx = e.x - x;
-      const dy = e.y - y;
-      if (dx * dx + dy * dy <= r2) out.push(e);
-    }
-    return out;
+    return this.enemyGrid.queryRadius(x, y, radius, []);
   }
 
   /* ------------------------------------------------------------------ */

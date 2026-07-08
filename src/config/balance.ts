@@ -304,12 +304,26 @@ export const OVERTIME = {
   HP_PER_MIN: 0.5,
   /** extra contact-damage multiplier gained per overtime minute */
   DMG_PER_MIN: 0.2,
-  /** spawn-interval divisor gained per overtime minute */
-  SPAWN_PER_MIN: 0.35,
+  /**
+   * Spawn-interval divisor gained per overtime minute. Kept modest because the
+   * difficulty in overtime should climb through tougher/faster enemies (hp/dmg
+   * above) rather than raw concurrent COUNT — count is what pins the frame rate
+   * (physics bodies + steering + shadows scale with it), so letting it run away
+   * is what used to buckle the browser. Endless is still endless; it just kills
+   * you via a meaner horde, not an unrenderable one.
+   */
+  SPAWN_PER_MIN: 0.18,
   /** flat concurrent-cap bonus per overtime minute */
-  CAP_PER_MIN: 30,
-  /** hard ceiling on the concurrent cap — must stay under SPAWN.POOL_SIZE */
-  MAX_CAP: 520,
+  CAP_PER_MIN: 12,
+  /**
+   * Hard ceiling on the concurrent cap — must stay under SPAWN.POOL_SIZE. Was
+   * 520, which (together with a steep per-minute ramp) drove hundreds of bodies
+   * on screen a few minutes into overtime and crashed the tab. The spatial grid
+   * makes the weapon queries cheap at this size, and the base game already tops
+   * out at a 270 wave cap, so 340 leaves real overtime headroom without the
+   * runaway.
+   */
+  MAX_CAP: 340,
 } as const;
 
 /** Overtime multipliers for an elapsed time; all-1/0 before RUN.SURVIVE_MS. */
@@ -371,6 +385,6 @@ export const SPAWN = {
   DESPAWN_DIST: 1400,
   /** max enemies in the pool — must cover the worst-case concurrent cap:
    *  the spawner clamps its cap (curse + overtime + event bonus included)
-   *  to OVERTIME.MAX_CAP (520), so 560 leaves a safety margin. */
-  POOL_SIZE: 560,
+   *  to OVERTIME.MAX_CAP (340), so 400 leaves a safety margin. */
+  POOL_SIZE: 400,
 } as const;
