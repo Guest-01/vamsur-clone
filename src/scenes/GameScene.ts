@@ -341,7 +341,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on(EVENTS.REROLL_REQUESTED, this.onRerollRequested, this);
     this.events.on(
       EVENTS.VICTORY_DECIDED,
-      (p: { continueRun: boolean }) => this.onVictoryDecided(p.continueRun),
+      () => this.onVictoryDecided(),
       this
     );
 
@@ -405,17 +405,17 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Victory: survived the full run. The win is locked in immediately; the
-    // player then chooses between the results screen and overtime (endless).
+    // Victory: survived the full run. The win is locked in and the run ends at
+    // the 8:00 mark — a victory screen, then the results.
     if (run.elapsedMs >= RUN.SURVIVE_MS && !run.victoryAchieved) {
       this.onVictoryReached();
     }
   }
 
   /**
-   * The 8:00 mark was survived. Record the victory NOW (an overtime death must
-   * not lose it), land the score bonus, and pause for the overtime choice —
-   * same pause pattern as the level-up screen (the UIScene stays live).
+   * The 8:00 mark was survived — the run is won. Record the victory, land the
+   * score bonus, and pause for the victory screen (same pause pattern as the
+   * level-up screen; the UIScene stays live and finalises the run on dismiss).
    */
   private onVictoryReached(): void {
     this.run.victoryAchieved = true;
@@ -426,15 +426,10 @@ export class GameScene extends Phaser.Scene {
     this.scene.pause();
   }
 
-  /** UI -> game: the overtime decision was made. */
-  private onVictoryDecided(continueRun: boolean): void {
+  /** UI -> game: the victory screen was dismissed — finalise the run. */
+  private onVictoryDecided(): void {
     this.scene.resume();
-    if (!continueRun) {
-      this.endRun(true);
-      return;
-    }
-    // Overtime: nothing to flip — the spawner and enemy stats read the ramp
-    // from overtimeMults(elapsedMs), which is >1 from this moment on.
+    this.endRun(true);
   }
 
   /* ------------------------------------------------------------------ */
@@ -811,7 +806,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Dying in overtime still counts as the victory it already was.
+    // A death here is a defeat: the run is only ever won at the 8:00 mark, which
+    // pauses immediately and finalises without returning to gameplay, so
+    // victoryAchieved is still false whenever we reach this.
     this.endRun(this.run.victoryAchieved);
   }
 
@@ -859,8 +856,8 @@ export class GameScene extends Phaser.Scene {
       weaponDamage,
     };
 
-    // (The curse-contract unlock was already recorded in onVictoryReached —
-    // it must survive an overtime death, so it can't wait until here.)
+    // (The curse-contract unlock was already recorded in onVictoryReached,
+    // the moment the 8:00 mark was reached.)
 
     // Best-time persistence AND "new best" detection are owned by GameOverScene
     // (it must compare against the PRIOR record before overwriting it).

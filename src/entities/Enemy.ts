@@ -25,7 +25,6 @@ import {
   curseMults,
   damageScale,
   hpScale,
-  overtimeMults,
   speedScale,
 } from '../config/balance';
 
@@ -109,14 +108,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite implements EnemyLike {
     const r = (this.width / 2) * 0.7;
     this.setCircle(r, this.width / 2 - r, this.height / 2 - r);
 
-    // time-scaled combat stats (× the run's curse-contract multipliers,
-    // × the post-victory overtime ramp — all-1 before 8:00)
+    // time-scaled combat stats (× the run's curse-contract multipliers;
+    // all-1 at curse 0)
     const elapsed = ctx.run.elapsedMs;
     const curse = curseMults(ctx.run.curse);
-    const ot = overtimeMults(elapsed);
-    this.maxHp = def.baseHp * hpScale(elapsed) * curse.enemyHp * ot.hp;
+    this.maxHp = def.baseHp * hpScale(elapsed) * curse.enemyHp;
     this.hp = this.maxHp;
-    this.contactDamage = def.contactDamage * damageScale(elapsed) * curse.enemyDmg * ot.dmg;
+    this.contactDamage = def.contactDamage * damageScale(elapsed) * curse.enemyDmg;
     this.speed = def.moveSpeed * speedScale(elapsed) * curse.enemySpeed;
 
     // reset transient state

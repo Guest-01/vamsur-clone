@@ -290,59 +290,6 @@ export const RUN = {
 } as const;
 
 /* ------------------------------------------------------------------ */
-/* Overtime — endless mode after the 8:00 victory                      */
-/* ------------------------------------------------------------------ */
-
-/**
- * Surviving RUN.SURVIVE_MS locks in the victory; the player may then descend
- * into OVERTIME: an endless stretch where difficulty ramps far steeper than
- * the base curves, and only the score keeps growing. Tuned so a strong build
- * lasts a couple of minutes, not forever.
- */
-export const OVERTIME = {
-  /** extra enemy-hp multiplier gained per overtime minute (on top of hpScale) */
-  HP_PER_MIN: 0.5,
-  /** extra contact-damage multiplier gained per overtime minute */
-  DMG_PER_MIN: 0.2,
-  /**
-   * Spawn-interval divisor gained per overtime minute. Kept modest because the
-   * difficulty in overtime should climb through tougher/faster enemies (hp/dmg
-   * above) rather than raw concurrent COUNT — count is what pins the frame rate
-   * (physics bodies + steering + shadows scale with it), so letting it run away
-   * is what used to buckle the browser. Endless is still endless; it just kills
-   * you via a meaner horde, not an unrenderable one.
-   */
-  SPAWN_PER_MIN: 0.18,
-  /** flat concurrent-cap bonus per overtime minute */
-  CAP_PER_MIN: 12,
-  /**
-   * Hard ceiling on the concurrent cap — must stay under SPAWN.POOL_SIZE. Was
-   * 520, which (together with a steep per-minute ramp) drove hundreds of bodies
-   * on screen a few minutes into overtime and crashed the tab. The spatial grid
-   * makes the weapon queries cheap at this size, and the base game already tops
-   * out at a 270 wave cap, so 340 leaves real overtime headroom without the
-   * runaway.
-   */
-  MAX_CAP: 340,
-} as const;
-
-/** Overtime multipliers for an elapsed time; all-1/0 before RUN.SURVIVE_MS. */
-export function overtimeMults(elapsedMs: number): {
-  hp: number;
-  dmg: number;
-  spawnRate: number;
-  capAdd: number;
-} {
-  const min = Math.max(0, (elapsedMs - RUN.SURVIVE_MS) / 60000);
-  return {
-    hp: 1 + min * OVERTIME.HP_PER_MIN,
-    dmg: 1 + min * OVERTIME.DMG_PER_MIN,
-    spawnRate: 1 + min * OVERTIME.SPAWN_PER_MIN,
-    capAdd: Math.floor(min * OVERTIME.CAP_PER_MIN),
-  };
-}
-
-/* ------------------------------------------------------------------ */
 /* Score                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -384,7 +331,15 @@ export const SPAWN = {
   /** despawn enemies that wander this far from the player */
   DESPAWN_DIST: 1400,
   /** max enemies in the pool — must cover the worst-case concurrent cap:
-   *  the spawner clamps its cap (curse + overtime + event bonus included)
-   *  to OVERTIME.MAX_CAP (340), so 400 leaves a safety margin. */
+   *  the spawner clamps its cap (curse + event bonus included) to
+   *  MAX_CONCURRENT (340), so 400 leaves a safety margin. */
   POOL_SIZE: 400,
+  /**
+   * Hard ceiling on the concurrent enemy cap — must stay under POOL_SIZE. The
+   * final wave caps at 270, and curse 7 (×1.84) plus a surge event (+40) would
+   * push that past ~540 live bodies, which pins the frame rate (steering +
+   * shadows + spatial queries all scale with the live count). 340 leaves real
+   * headroom for the hardest runs without letting the horde outgrow the tab.
+   */
+  MAX_CONCURRENT: 340,
 } as const;

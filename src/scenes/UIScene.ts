@@ -8,7 +8,7 @@ import type {
   PlayerStats,
 } from '../types';
 import { TEXTURES, FRAMES } from '../config/assets';
-import { GAME, COLORS, DEPTH, DEFAULT_STATS, PLAYER, RUN } from '../config/balance';
+import { GAME, COLORS, DEPTH, DEFAULT_STATS, PLAYER } from '../config/balance';
 import { getCharacter } from '../content/characters';
 import { LevelUpOverlay } from '../ui/LevelUpOverlay';
 import { PauseOverlay } from '../ui/PauseOverlay';
@@ -78,8 +78,6 @@ export class UIScene extends Phaser.Scene {
 
   private timerText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
-  /** timer switched to the gold overtime style (one-shot on 8:00) */
-  private overtimeStyled = false;
 
   private hpBarFill!: Phaser.GameObjects.Rectangle;
   private hpBarMaxWidth = 300;
@@ -122,7 +120,7 @@ export class UIScene extends Phaser.Scene {
   private levelUpOverlay!: LevelUpOverlay;
   private pauseOverlay!: PauseOverlay;
   private helpOverlay!: HelpOverlay;
-  /** the "results or overtime?" modal shown when 8:00 is survived */
+  /** the victory screen shown when 8:00 is survived */
   private victoryChoice?: Phaser.GameObjects.Container;
   /** true while the revive freeze beat is playing (GameScene is paused) */
   private reviveFreeze = false;
@@ -513,10 +511,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   /* --------------------------------------------------------------- */
-  /* Victory choice (8:00 survived → results or overtime)            */
+  /* Victory screen (8:00 survived → run finalised)                  */
   /* --------------------------------------------------------------- */
 
-  /** game -> UI: the 8:00 mark was survived; offer results vs overtime. */
+  /** game -> UI: the 8:00 mark was survived; show the victory screen. */
   private onVictoryChoice(): void {
     if (this.victoryChoice) return; // already showing
     const w = this.scale.width;
@@ -550,19 +548,10 @@ export class UIScene extends Phaser.Scene {
     );
     c.add(
       this.add
-        .text(w / 2, cy - 56, '영원한 밤을 견뎌냈다 — 승리는 확정되었다.', {
+        .text(w / 2, cy - 40, '영원한 밤을 견뎌냈다 — 승리는 확정되었다.', {
           fontFamily: serif,
           fontSize: '26px',
           color: '#e8e0d0',
-        })
-        .setOrigin(0.5)
-    );
-    c.add(
-      this.add
-        .text(w / 2, cy - 16, '오버타임: 적이 급격히 강해지고, 점수만이 계속 쌓인다.', {
-          fontFamily: serif,
-          fontSize: '20px',
-          color: '#8a8296',
         })
         .setOrigin(0.5)
     );
@@ -598,16 +587,15 @@ export class UIScene extends Phaser.Scene {
       c.add(txt);
     };
 
-    mkButton(w / 2 - 192, '결과 확인', COLORS.GOLD, () => this.decideVictory(false));
-    mkButton(w / 2 + 192, '심연으로 †', COLORS.BLOOD_LIGHT, () => this.decideVictory(true));
+    mkButton(w / 2, '결과 확인', COLORS.GOLD, () => this.decideVictory());
   }
 
-  private decideVictory(continueRun: boolean): void {
+  private decideVictory(): void {
     if (!this.victoryChoice) return;
     Sound.play('uiConfirm');
     this.victoryChoice.destroy();
     this.victoryChoice = undefined;
-    this.gameScene.events.emit(EVENTS.VICTORY_DECIDED, { continueRun });
+    this.gameScene.events.emit(EVENTS.VICTORY_DECIDED, {});
   }
 
   /** A timed run event started/ended: banner + ambient tint. */
@@ -791,7 +779,6 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(HUD_DEPTH + 2);
 
-    this.overtimeStyled = false;
     this.scoreText = this.add
       .text(this.scale.width / 2, 112, 'SCORE 0', {
         fontFamily: '"Press Start 2P", Galmuri11, monospace',
@@ -1186,12 +1173,6 @@ export class UIScene extends Phaser.Scene {
     const m = Math.floor(total / 60);
     const s = total % 60;
     this.timerText.setText(`${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-
-    // Overtime: the timer turns gold past the victory mark (one-shot restyle).
-    if (!this.overtimeStyled && this.state.elapsedMs >= RUN.SURVIVE_MS) {
-      this.overtimeStyled = true;
-      this.timerText.setColor('#f0d896');
-    }
   }
 
   private refreshScore(): void {

@@ -11,7 +11,7 @@
 import Phaser from 'phaser';
 import type { EnemyDef, GameContext, IEnemySpawner, WaveEntry } from '../types';
 import { ENEMIES, WAVES } from '../content/enemies';
-import { CHAMPION, OVERTIME, SPAWN, championChance, curseMults, overtimeMults } from '../config/balance';
+import { CHAMPION, SPAWN, championChance, curseMults } from '../config/balance';
 import { Enemy } from '../entities/Enemy';
 import { Sound } from '../audio/Sound';
 
@@ -53,21 +53,20 @@ export class EnemySpawner implements IEnemySpawner {
 
     // --- 2. cadence spawning --------------------------------------------
     // The curse contract speeds up the cadence (spawnRate) and raises the
-    // concurrent cap; a surge run-event (blood moon) stacks on top of both,
-    // and post-victory overtime ramps them all steeply per minute. The final
-    // cap is clamped so it can never outgrow the enemy pool.
+    // concurrent cap; a surge run-event (blood moon) stacks on top of both. The
+    // final cap is clamped to SPAWN.MAX_CONCURRENT so it can never outgrow the
+    // enemy pool (curse 7 + a surge would otherwise blow past it).
     const curse = curseMults(ctx.run.curse);
-    const ot = overtimeMults(elapsedMs);
     this.spawnAccum += delta;
     const intervalMs =
       (wave.spawnIntervalSec * 1000) /
-      ((ctx.run.eventSpawnRate || 1) * curse.spawnRate * ot.spawnRate);
+      ((ctx.run.eventSpawnRate || 1) * curse.spawnRate);
     if (this.spawnAccum < intervalMs) return;
     this.spawnAccum -= intervalMs;
 
     const cap = Math.min(
-      OVERTIME.MAX_CAP,
-      Math.round(wave.cap * curse.cap) + ot.capAdd + ctx.run.eventCapBonus
+      SPAWN.MAX_CONCURRENT,
+      Math.round(wave.cap * curse.cap) + ctx.run.eventCapBonus
     );
     const alive = ctx.enemies.countActive(true);
     if (alive >= cap) return;

@@ -42,9 +42,9 @@ export const EVENTS = {
   /** {revivesLeft:number} — game -> UI: an auto-revive fired; the GameScene is
    *  paused for the freeze beat and the UIScene resumes it (REVIVE_FREEZE_MS) */
   REVIVED: 'revived',
-  /** {} — game -> UI: 8:00 survived; show the "end or overtime?" choice (gameplay is paused) */
+  /** {} — game -> UI: 8:00 survived; show the victory screen (gameplay is paused) */
   VICTORY_CHOICE: 'victory-choice',
-  /** {continueRun:boolean} — UI -> game: the player's overtime decision */
+  /** {} — UI -> game: the victory screen was dismissed; finalise the run */
   VICTORY_DECIDED: 'victory-decided',
   /** {elapsedMs:number} emitted ~4x/sec */
   TIMER: 'timer',
@@ -319,8 +319,8 @@ export interface RunState {
   gold: number;
   /** accumulated per-enemy kill score (one term of the run score) */
   killScore: number;
-  /** the 8:00 mark was survived — victory is locked in even if the player
-   *  later dies in overtime (see GameScene.onVictoryReached) */
+  /** the 8:00 mark was survived — the run is won and ends here
+   *  (see GameScene.onVictoryReached) */
   victoryAchieved: boolean;
   /** auto-revives consumed this run. `stats.revives` is rebuilt from the
    *  definitions on every recompute, so spent charges must be re-subtracted

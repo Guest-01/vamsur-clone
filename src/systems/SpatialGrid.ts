@@ -6,7 +6,7 @@ import type { EnemySprite } from '../types';
  * weapon queries (getEnemiesInRadius / getNearestEnemy) used to do: with a horde
  * of hundreds of enemies those scans were run dozens of times per frame (one per
  * orbit orb, per mine, per burn patch, per aura/whip/spin tick), so the cost was
- * O(enemies × queries) — the dominant CPU sink in the late game and overtime.
+ * O(enemies × queries) — the dominant CPU sink in the late game.
  *
  * With the grid a radius query only visits the handful of cells the circle
  * overlaps, so the cost drops to O(local density). Distances are still verified
